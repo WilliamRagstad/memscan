@@ -1,14 +1,17 @@
 #![cfg(windows)]
 
-use crate::process::{MemoryRegionIterator, ProcessHandle, SystemInfo};
+use crate::handle::AutoCloseHandle;
+use crate::process::{MemoryRegionIterator, SystemInfo};
 use anyhow::Result;
 use owo_colors::OwoColorize;
-
 use std::cmp::min;
-
-use winapi::shared::basetsd::SIZE_T;
-use winapi::shared::minwindef::{LPCVOID, LPVOID};
-use winapi::um::memoryapi::ReadProcessMemory;
+use winapi::{
+    shared::{
+        basetsd::SIZE_T,
+        minwindef::{LPCVOID, LPVOID},
+    },
+    um::memoryapi::ReadProcessMemory,
+};
 
 pub struct ScanOptions<'a> {
     pub pattern: Option<&'a [u8]>,
@@ -16,7 +19,11 @@ pub struct ScanOptions<'a> {
 }
 
 /// Perform static, single-pass scan all readable regions.
-pub fn scan_process(proc: &ProcessHandle, sys: &SystemInfo, opts: &ScanOptions<'_>) -> Result<()> {
+pub fn scan_process(
+    proc: &AutoCloseHandle,
+    sys: &SystemInfo,
+    opts: &ScanOptions<'_>,
+) -> Result<()> {
     let page_size = sys.page_size;
     let mut page_buf = vec![0u8; page_size];
 
@@ -29,7 +36,7 @@ pub fn scan_process(proc: &ProcessHandle, sys: &SystemInfo, opts: &ScanOptions<'
 
         if opts.verbose > 0 {
             println!(
-                "{} {:#x} - {:#x} ({} KiB)",
+                "{} {:016x} - {:016x} ({} KiB)",
                 "[region]".bright_blue(),
                 region.base_address,
                 region.base_address + region.size,
@@ -67,12 +74,12 @@ pub fn scan_process(proc: &ProcessHandle, sys: &SystemInfo, opts: &ScanOptions<'
                     if let Some(rel_off) = naive_search(&page_buf[..to_read], pattern) {
                         let abs_addr = region.base_address + offset + rel_off;
                         matches_found += 1;
-                        println!("{} match at {:#x}", "[hit]".bright_green(), abs_addr);
+                        println!("{} match at {:016x}", "[hit]".bright_green(), abs_addr);
                     }
                 }
             } else if opts.verbose > 1 {
                 println!(
-                    "{} failed to read page at {:#x}",
+                    "{} failed to read page at {:016x}",
                     "[warn]".yellow(),
                     region.base_address + offset
                 );

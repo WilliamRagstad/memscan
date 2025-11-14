@@ -1,4 +1,5 @@
 #![allow(non_snake_case, dead_code)]
+use crate::handle::AutoCloseHandle;
 use anyhow::Result;
 use std::mem::{MaybeUninit, size_of};
 use winapi::{
@@ -10,13 +11,13 @@ use winapi::{
         handleapi::CloseHandle,
         memoryapi::VirtualQueryEx,
         processthreadsapi::OpenProcess,
-        sysinfoapi::{GetSystemInfo, SYSTEM_INFO},
+        sysinfoapi::{GetNativeSystemInfo, SYSTEM_INFO},
         tlhelp32::{
             CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
             TH32CS_SNAPPROCESS,
         },
         winnt::{
-            HANDLE, MEM_COMMIT, MEM_FREE, MEM_RESERVE, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READ,
+            MEM_COMMIT, MEM_FREE, MEM_RESERVE, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READ,
             PAGE_EXECUTE_READWRITE, PAGE_EXECUTE_WRITECOPY, PAGE_GUARD, PAGE_NOACCESS,
             PAGE_READONLY, PAGE_READWRITE, PAGE_WRITECOPY, PROCESS_QUERY_INFORMATION,
             PROCESS_VM_READ,
@@ -24,34 +25,13 @@ use winapi::{
     },
 };
 
-pub struct ProcessHandle(HANDLE);
-
-unsafe impl Send for ProcessHandle {}
-unsafe impl Sync for ProcessHandle {}
-
-impl ProcessHandle {
-    pub fn raw(&self) -> HANDLE {
-        self.0
-    }
-}
-
-impl Drop for ProcessHandle {
-    fn drop(&mut self) {
-        unsafe {
-            if !self.0.is_null() {
-                CloseHandle(self.0);
-            }
-        }
-    }
-}
-
-pub fn open_process(pid: u32) -> Result<ProcessHandle> {
+pub fn open_process(pid: u32) -> Result<AutoCloseHandle> {
     unsafe {
-        let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid);
+        let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
         if handle.is_null() {
             anyhow::bail!("OpenProcess failed for pid {}", pid);
         }
-        Ok(ProcessHandle(handle))
+        Ok(AutoCloseHandle(handle))
     }
 }
 
@@ -106,17 +86,19 @@ pub fn find_process_by_name(name: &str) -> Result<Option<u32>> {
 pub struct SystemInfo {
     pub min_app_addr: usize,
     pub max_app_addr: usize,
+    pub granularity: usize,
     pub page_size: usize,
 }
 
 pub fn query_system_info() -> SystemInfo {
     unsafe {
         let mut info = MaybeUninit::<SYSTEM_INFO>::uninit();
-        GetSystemInfo(info.as_mut_ptr());
+        GetNativeSystemInfo(info.as_mut_ptr());
         let info = info.assume_init();
         SystemInfo {
             min_app_addr: info.lpMinimumApplicationAddress as usize,
             max_app_addr: info.lpMaximumApplicationAddress as usize,
+            granularity: info.dwAllocationGranularity as usize,
             page_size: info.dwPageSize as usize,
         }
     }
@@ -133,9 +115,11 @@ pub struct MemoryRegion {
 }
 
 fn is_region_interesting(mbi: &MEMORY_BASIC_INFORMATION) -> bool {
-    // Only committed regions
-    if mbi.State != MEM_COMMIT {
-        return false;
+    if (mbi.State & MEM_COMMIT) != MEM_COMMIT // Not committed
+	|| (mbi.State & MEM_FREE) == MEM_FREE // Free or reserved region
+	|| (mbi.State & MEM_RESERVE) == MEM_RESERVE
+    {
+        return false; // Only committed regions
     }
 
     // Basic access/protection filtering
@@ -146,10 +130,8 @@ fn is_region_interesting(mbi: &MEMORY_BASIC_INFORMATION) -> bool {
 
     // Low byte encodes the primary protection flags.
     // Make sure it's something readable.
-    let primary = protect & 0xFF;
-
     matches!(
-        primary,
+        protect & 0xFF,
         PAGE_READONLY
             | PAGE_READWRITE
             | PAGE_WRITECOPY
@@ -161,13 +143,13 @@ fn is_region_interesting(mbi: &MEMORY_BASIC_INFORMATION) -> bool {
 
 /// Iterates committed readable memory regions of the process.
 pub struct MemoryRegionIterator<'a> {
-    proc: &'a ProcessHandle,
+    proc: &'a AutoCloseHandle,
     cur_addr: usize,
     max_addr: usize,
 }
 
 impl<'a> MemoryRegionIterator<'a> {
-    pub fn new(proc: &'a ProcessHandle, sys: &SystemInfo) -> Self {
+    pub fn new(proc: &'a AutoCloseHandle, sys: &SystemInfo) -> Self {
         Self {
             proc,
             cur_addr: sys.min_app_addr,
@@ -201,10 +183,6 @@ impl<'a> Iterator for MemoryRegionIterator<'a> {
 
                 // Advance iterator *before* possible continue
                 self.cur_addr = region_base.saturating_add(region_size);
-
-                if mbi.State == MEM_FREE || mbi.State == MEM_RESERVE {
-                    continue;
-                }
 
                 if !is_region_interesting(&mbi) {
                     continue;

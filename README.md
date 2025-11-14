@@ -16,6 +16,7 @@ All functionalities are implemented using User-Mode Windows APIs, no kernel-mode
 The key Windows API is `VirtualQueryEx`, which retrieves information about a range of pages in the virtual address space of **a specified process**. Efficiently scanning a process's memory regions is done via a shared object mapping through  `CreateFileMapping` and `MapViewOfFile` into pre-allocated local pages.
 
 - Functions
+  - `GetNativeSystemInfo`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getnativesysteminfo), [winapi](https://docs.rs/winapi/latest/winapi/um/sysinfoapi/fn.GetNativeSystemInfo.html)
   - `VirtualQueryEx`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualqueryex), [winapi](https://docs.rs/winapi/latest/winapi/um/memoryapi/fn.VirtualQueryEx.html)
   - `VirtualAlloc`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc), [winapi](https://docs.rs/winapi/latest/winapi/um/memoryapi/fn.VirtualAlloc.html)
   - `ReadProcessMemory`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-readprocessmemory), [winapi](https://docs.rs/winapi/latest/winapi/um/memoryapi/fn.ReadProcessMemory.html)

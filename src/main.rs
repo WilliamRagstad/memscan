@@ -2,6 +2,7 @@
 compile_error!("This program only supports Windows.");
 
 mod cli;
+mod handle;
 mod memoryapi;
 mod process;
 mod scanner;
@@ -34,6 +35,14 @@ fn main() -> anyhow::Result<()> {
             let proc = open_process(pid)?;
 
             let sys = query_system_info();
+            println!(
+                "{} system info: min_addr={:016x}, max_addr={:016x}, page_size={}, granularity={}",
+                "[info]".bright_cyan(),
+                sys.min_app_addr,
+                sys.max_app_addr,
+                sys.page_size,
+                sys.granularity
+            );
 
             let pattern_bytes = pattern.as_ref().map(|s| parse_hex_pattern(s)).transpose()?;
 
