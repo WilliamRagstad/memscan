@@ -13,6 +13,68 @@ All functionalities are implemented using User-Mode Windows APIs, no kernel-mode
 - [ ] Identify dynamic memory regions (e.g., stack, all heaps, allocated virtual pages).
 - [ ] Filter memory regions based on module ownership.
 
+## Usage
+
+```sh
+memscan scan <process_id/name> --pattern <byte_pattern> [options]
+```
+
+### Example
+
+<details>
+<summary>Verbose memory scan output for Notepad.exe searching for "MZ" header pattern</summary>
+
+```sh
+$ memscan scan notepad --pattern "4D 5A 90 00" -vv
+[info] looking up process by name: notepad
+[info] found pid=2872
+[info] system info: min_addr=0000000000010000, max_addr=00007ffffffeffff, page_size=4096, granularity=65536
+[info] found 133 module regions
+[region] 000000007ffe0000 - 000000007ffe1000 (4 KiB)    [PRIVATE, COMMIT, READONLY, unknown]
+[region] 000000007ffea000 - 000000007ffeb000 (4 KiB)    [PRIVATE, COMMIT, READONLY, unknown]
+[region] 000000b005baa000 - 000000b005bb0000 (24 KiB)   [PRIVATE, COMMIT, READWRITE, unknown]
+--- snip ---
+[region] 000001f1a30b0000 - 000001f1a30b1000 (4 KiB)    [MAPPED, COMMIT, READWRITE, unknown]
+[region] 000001f1a30c0000 - 000001f1a30c7000 (28 KiB)   [MAPPED, COMMIT, READONLY, unknown]
+[match]  000001f1a30c0000
+ ... 4d 5a 90 00 03 00 00 00 04 00 00 00  ...
+[region] 000001f1a30d0000 - 000001f1a30d3000 (12 KiB)   [MAPPED, COMMIT, READONLY, unknown]
+[region] 000001f1a30e0000 - 000001f1a30e1000 (4 KiB)    [MAPPED, COMMIT, READWRITE, unknown]
+[region] 000001f1a30f0000 - 000001f1a30fb000 (44 KiB)   [MAPPED, COMMIT, READONLY, unknown]
+[region] 000001f1a3100000 - 000001f1a3247000 (1308 KiB)         [MAPPED, COMMIT, READONLY, unknown]
+[region] 000001f1a3250000 - 000001f1a3263000 (76 KiB)   [MAPPED, COMMIT, READONLY, unknown]
+[region] 000001f1a3270000 - 000001f1a3271000 (4 KiB)    [MAPPED, COMMIT, READONLY, unknown]
+[region] 000001f1a3280000 - 000001f1a338f000 (1084 KiB)         [IMAGE, COMMIT, READONLY, unknown]
+[match]  000001f1a3280000
+ ... 4d 5a 90 00 03 00 00 00 04 00 00 00  ...
+[region] 000001f1a3390000 - 000001f1a341a000 (552 KiB)  [IMAGE, COMMIT, READONLY, unknown]
+[match]  000001f1a3390000
+ ... 4d 5a 90 00 03 00 00 00 04 00 00 00  ...
+[region] 000001f1a3420000 - 000001f1a3424000 (16 KiB)   [MAPPED, COMMIT, READONLY, unknown]
+[region] 000001f1a3430000 - 000001f1a3432000 (8 KiB)    [MAPPED, COMMIT, READONLY, unknown]
+--- snip ---
+[region] 00007ffb85d3b000 - 00007ffb85d3c000 (4 KiB)    [IMAGE, COMMIT, EXECUTE_READ, unknown]
+[region] 00007ffb85d50000 - 00007ffb85d51000 (4 KiB)    [IMAGE, COMMIT, READONLY, SHLWAPI.dll]
+[match]  00007ffb85d50000
+ ... 4d 5a 90 00 03 00 00 00 04 00 00 00  ...
+[region] 00007ffb85d51000 - 00007ffb85d8d000 (240 KiB)  [IMAGE, COMMIT, EXECUTE_READ, SHLWAPI.dll]
+[region] 00007ffb85d8d000 - 00007ffb85dae000 (132 KiB)  [IMAGE, COMMIT, READONLY, SHLWAPI.dll]
+[region] 00007ffb85dae000 - 00007ffb85db0000 (8 KiB)    [IMAGE, COMMIT, READWRITE, SHLWAPI.dll]
+[region] 00007ffb85db0000 - 00007ffb85db7000 (28 KiB)   [IMAGE, COMMIT, READONLY, SHLWAPI.dll]
+[region] 00007ffb85db7000 - 00007ffb85db8000 (4 KiB)    [IMAGE, COMMIT, EXECUTE_READ, unknown]
+[region] 00007ffb85e60000 - 00007ffb85e61000 (4 KiB)    [IMAGE, COMMIT, READONLY, ntdll.dll]
+[match]  00007ffb85e60000
+ ... 4d 5a 90 00 03 00 00 00 04 00 00 00  ...
+[region] 00007ffb85e61000 - 00007ffb85fd3000 (1480 KiB)         [IMAGE, COMMIT, EXECUTE_READ, ntdll.dll]
+[region] 00007ffb85fd3000 - 00007ffb8602c000 (356 KiB)  [IMAGE, COMMIT, READONLY, ntdll.dll]
+[region] 00007ffb8602c000 - 00007ffb86036000 (40 KiB)   [IMAGE, COMMIT, READWRITE, ntdll.dll]
+[region] 00007ffb86036000 - 00007ffb860c8000 (584 KiB)  [IMAGE, COMMIT, READONLY, ntdll.dll]
+[region] 00007ffb860c8000 - 00007ffb860c9000 (4 KiB)    [IMAGE, COMMIT, EXECUTE_READ, unknown]
+[done] scanned 1544 regions, ~507292 KiB, 140 matches
+```
+
+</details>
+
 ## References
 
 The key Windows API is `VirtualQueryEx`, which retrieves information about a range of pages in the virtual address space of **a specified process**. Efficiently scanning a process's memory regions is done via a shared object mapping through  `CreateFileMapping` and `MapViewOfFile` into pre-allocated local pages.
