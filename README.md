@@ -13,6 +13,23 @@ All functionalities are implemented using User-Mode Windows APIs, no kernel-mode
 - [ ] Identify dynamic memory regions (e.g., stack, all heaps, allocated virtual pages).
 - [ ] Filter memory regions based on module ownership.
 
+## Development
+
+### Performance Benchmarking
+
+MemScan includes comprehensive benchmarking infrastructure using Criterion.rs. See [BENCHMARKING.md](BENCHMARKING.md) for detailed information on:
+
+- Running benchmarks for pattern search and hex parsing
+- Understanding performance metrics
+- Identifying optimization opportunities
+- Continuous performance testing
+
+Quick start:
+```sh
+cargo bench                    # Run all benchmarks
+cargo bench --bench pattern_search   # Run specific benchmark
+```
+
 ## Usage
 
 ```sh

@@ -19,3 +19,20 @@ winapi = { version = "0.3", features = [
 	"tlhelp32",
 	"psapi",
 ] }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+divan = "0.1"
+
+[[bench]]
+name = "pattern_search"
+harness = false
+
+[[bench]]
+name = "hex_parsing"
+harness = false
+
+[profile.bench]
+opt-level = 3
+lto = true
+codegen-units = 1

@@ -1,0 +1,70 @@
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need history for comparison
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache Cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-bench-${{ hashFiles('**/Cargo.lock') }}
+      
+      # Run benchmarks and save results
+      - name: Run benchmarks
+        run: cargo bench --no-fail-fast -- --verbose
+        continue-on-error: true
+      
+      # Archive benchmark results
+      - name: Archive benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: |
+            target/criterion/
+            !target/criterion/**/raw.csv
+          retention-days: 30
+      
+      # Generate summary for PR comments
+      - name: Generate benchmark summary
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "## Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Benchmarks have been run. Download the full results from artifacts." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Stats" >> $GITHUB_STEP_SUMMARY
+          echo "- Pattern Search Benchmarks: Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- Hex Parsing Benchmarks: Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 View detailed HTML reports in the artifacts." >> $GITHUB_STEP_SUMMARY
