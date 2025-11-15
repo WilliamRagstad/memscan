@@ -18,6 +18,7 @@ use winapi::{
 pub struct ScanOptions<'a> {
     pub pattern: Option<&'a [u8]>,
     pub verbose: u8,
+    pub all_modules: bool,
 }
 
 /// Perform static, single-pass scan all readable regions.
@@ -25,7 +26,7 @@ pub fn scan_process(
     proc: &AutoCloseHandle,
     sys: &SystemInfo,
     opts: &ScanOptions<'_>,
-    ignored: &[MemoryRegion],
+    modules: &[MemoryRegion],
 ) -> Result<()> {
     let page_size = sys.page_size;
     let mut page_buf = vec![0u8; page_size];
@@ -35,54 +36,58 @@ pub fn scan_process(
     let mut matches_found = 0usize;
 
     for region in MemoryRegionIterator::new(proc, sys) {
-        if let Some(ign) = ignored.iter().find(|ign| ign.is_superset_of(&region)) {
-            let image_file = ign.image_file.as_deref().unwrap_or("unknown");
-            if opts.verbose > 2 {
-                println!(
-                    "{}   {:016x} - {:016x} ({} KiB) \t{}{}{}",
-                    "[skip]".bright_yellow(),
-                    region.base_address,
-                    region.base_address + region.size,
-                    region.size / 1024,
-                    "[".magenta(),
-                    image_file.magenta(),
-                    "]".magenta()
-                );
-            } else if opts.verbose > 1 {
-                let image_name = image_file
-                    .rsplit(['\\', '/'].as_ref())
-                    .next()
-                    .unwrap_or(image_file);
-                println!(
-                    "{}   {:016x} - {:016x} ({} KiB) \t{}{}{}",
-                    "[skip]".bright_yellow(),
-                    region.base_address,
-                    region.base_address + region.size,
-                    region.size / 1024,
-                    "[".magenta(),
-                    image_name.magenta(),
-                    "]".magenta()
-                );
+        let current_module = modules.iter().find(|ign| ign.is_superset_of(&region));
+        let current_module_file = current_module.and_then(|ign| ign.image_file.as_deref());
+        let current_module_name = current_module_file
+            .and_then(|f| Some(f.rsplit(['\\', '/'].as_ref()).next().unwrap_or(f)));
+
+        if !opts.all_modules {
+            if let Some(ign) = current_module {
+                let image_file = ign.image_file.as_deref().unwrap_or("unknown");
+                if opts.verbose > 2 {
+                    println!(
+                        "{}   {:016x} - {:016x} ({} KiB) \t{}{}{}",
+                        "[skip]".bright_yellow(),
+                        region.base_address,
+                        region.base_address + region.size,
+                        region.size / 1024,
+                        "[".magenta(),
+                        image_file.magenta(),
+                        "]".magenta()
+                    );
+                } else if opts.verbose > 1 {
+                    let image_name = image_file
+                        .rsplit(['\\', '/'].as_ref())
+                        .next()
+                        .unwrap_or(image_file);
+                    println!(
+                        "{}   {:016x} - {:016x} ({} KiB) \t{}{}{}",
+                        "[skip]".bright_yellow(),
+                        region.base_address,
+                        region.base_address + region.size,
+                        region.size / 1024,
+                        "[".magenta(),
+                        image_name.magenta(),
+                        "]".magenta()
+                    );
+                }
+                continue;
             }
-            continue;
         }
 
         total_regions += 1;
 
         if opts.verbose > 1 {
             println!(
-                "{} {:016x} - {:016x} ({} KiB) \t{}",
+                "{} {:016x} - {:016x} ({} KiB) \t[{}, {}, {}, {}]",
                 "[region]".bright_blue(),
                 region.base_address,
                 region.base_address + region.size,
                 region.size / 1024,
-                format!(
-                    "[{}, {}, {}]",
-                    type_to_str(region.type_),
-                    state_to_str(region.state),
-                    protect_to_str(region.protect),
-                )
-                .green(),
+                type_to_str(region.type_).green(),
+                state_to_str(region.state).green(),
+                protect_to_str(region.protect).green(),
+                current_module_name.unwrap_or("unknown").magenta()
             );
         } else if opts.verbose > 0 {
             println!(

@@ -50,24 +50,22 @@ fn main() -> anyhow::Result<()> {
                 sys.granularity
             );
 
-            // When false (default), skip regions that belong to modules not originating from the
-            // target process. When true, scan all modules instead of restricting to the process's own
-            // modules. This relies on future metadata on `MemoryRegion` that can be used to determine
-            // whether a region is backed by one of the process's own modules.
-            let ignored_modules = if !all_modules {
-                process::get_process_module_regions(&proc)?
-            } else {
-                vec![]
-            };
+            let modules = process::get_process_module_regions(&proc)?;
+            println!(
+                "{} found {} module regions",
+                "[info]".bright_cyan(),
+                modules.len()
+            );
 
             let pattern_bytes = pattern.as_ref().map(|s| parse_hex_pattern(s)).transpose()?;
 
             let opts = ScanOptions {
                 pattern: pattern_bytes.as_deref(),
                 verbose: cli.verbose,
+                all_modules,
             };
 
-            scan_process(&proc, &sys, &opts, &ignored_modules)?;
+            scan_process(&proc, &sys, &opts, &modules)?;
         }
     }
     Ok(())
