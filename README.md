@@ -10,6 +10,8 @@ All functionalities are implemented using User-Mode Windows APIs, no kernel-mode
 - [ ] Support for scanning large memory regions efficiently.
 - [ ] Configurable scanning options (e.g., case sensitivity, wildcards).
 - [ ] Scriptable interface for automating scans with Python.
+- [ ] Identify dynamic memory regions (e.g., stack, all heaps, allocated virtual pages).
+- [ ] Filter memory regions based on module ownership.
 
 ## References
 
@@ -17,6 +19,8 @@ The key Windows API is `VirtualQueryEx`, which retrieves information about a ran
 
 - Functions
   - `GetNativeSystemInfo`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getnativesysteminfo), [winapi](https://docs.rs/winapi/latest/winapi/um/sysinfoapi/fn.GetNativeSystemInfo.html)
+  - `EnumProcessModules`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-enumprocessmodules), [winapi](https://docs.rs/winapi/latest/winapi/um/psapi/fn.EnumProcessModules.html)
+  - `GetModuleInformation`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-getmoduleinformation), [winapi](https://docs.rs/winapi/latest/winapi/um/psapi/fn.GetModuleInformation.html)
   - `VirtualQueryEx`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualqueryex), [winapi](https://docs.rs/winapi/latest/winapi/um/memoryapi/fn.VirtualQueryEx.html)
   - `VirtualAlloc`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc), [winapi](https://docs.rs/winapi/latest/winapi/um/memoryapi/fn.VirtualAlloc.html)
   - `ReadProcessMemory`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-readprocessmemory), [winapi](https://docs.rs/winapi/latest/winapi/um/memoryapi/fn.ReadProcessMemory.html)
@@ -27,12 +31,14 @@ The key Windows API is `VirtualQueryEx`, which retrieves information about a ran
   - `MapViewOfFile2`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile2)
 - Structures
   - `SYSTEM_INFO`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/ns-sysinfoapi-system_info), [winapi](https://docs.rs/winapi/latest/winapi/um/sysinfoapi/struct.SYSTEM_INFO.html)
+  - `MODULEINFO`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-moduleinfo), [winapi](https://docs.rs/winapi/latest/winapi/um/psapi/struct.MODULEINFO.html)
   - `MEMORY_BASIC_INFORMATION`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information), [winapi](https://docs.rs/winapi/latest/winapi/um/winnt/struct.MEMORY_BASIC_INFORMATION.html)
 - Microsoft Docs
   - [Working with Pages](https://learn.microsoft.com/en-us/windows/win32/memory/working-with-pages)
   - [Memory Management Functions](https://learn.microsoft.com/en-us/windows/win32/memory/memory-management-functions)
   - [Memory Protection Constants](https://learn.microsoft.com/en-us/windows/win32/memory/memory-protection-constants)
   - [Process Access Rights](https://learn.microsoft.com/en-us/windows/win32/procthread/process-security-and-access-rights)
+  - [Enumerating All Modules For a Process](https://learn.microsoft.com/en-us/windows/win32/psapi/enumerating-all-modules-for-a-process)
 - Blogs
   - [Alex Ionescu's Blog: Windows Internals, Thoughts on Security, and Reverse Engineering](https://www.alex-ionescu.com)
   - [Enumerate process modules via VirtualQueryEx. Simple C++ example.](https://cocomelonc.github.io/malware/2023/11/07/malware-trick-37.html)

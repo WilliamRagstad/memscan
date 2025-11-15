@@ -13,10 +13,16 @@ use owo_colors::OwoColorize;
 use process::{open_process, query_system_info};
 use scanner::{ScanOptions, scan_process};
 
+use crate::process::find_process_by_name;
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Scan { target, pattern } => {
+        Command::Scan {
+            target,
+            pattern,
+            all_modules,
+        } => {
             let pid = if target.chars().all(|c| c.is_ascii_digit()) {
                 let pid: u32 = target.parse()?;
                 println!("{} target pid={}", "[info]".bright_cyan(), pid);
@@ -27,7 +33,7 @@ fn main() -> anyhow::Result<()> {
                     "[info]".bright_cyan(),
                     target
                 );
-                let pid = process::find_process_by_name(&target)?
+                let pid = find_process_by_name(&target)?
                     .ok_or_else(|| anyhow::anyhow!("process with name '{}' not found", target))?;
                 println!("{} found pid={}", "[info]".bright_cyan(), pid);
                 pid
@@ -44,6 +50,16 @@ fn main() -> anyhow::Result<()> {
                 sys.granularity
             );
 
+            // When false (default), skip regions that belong to modules not originating from the
+            // target process. When true, scan all modules instead of restricting to the process's own
+            // modules. This relies on future metadata on `MemoryRegion` that can be used to determine
+            // whether a region is backed by one of the process's own modules.
+            let ignored_modules = if !all_modules {
+                process::get_process_module_regions(&proc)?
+            } else {
+                vec![]
+            };
+
             let pattern_bytes = pattern.as_ref().map(|s| parse_hex_pattern(s)).transpose()?;
 
             let opts = ScanOptions {
@@ -51,7 +67,7 @@ fn main() -> anyhow::Result<()> {
                 verbose: cli.verbose,
             };
 
-            scan_process(&proc, &sys, &opts)?;
+            scan_process(&proc, &sys, &opts, &ignored_modules)?;
         }
     }
     Ok(())

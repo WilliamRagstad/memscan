@@ -34,5 +34,10 @@ pub enum Command {
         /// Optional hex pattern to search for (e.g. "DEADBEEF")
         #[arg(short, long, value_hint = ValueHint::Other)]
         pattern: Option<String>,
+
+        /// Scan all modules, including those not originating from the target process
+        /// (by default, only the process's own modules are scanned)
+        #[arg(long)]
+        all_modules: bool,
     },
 }
