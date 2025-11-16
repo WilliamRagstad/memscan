@@ -1,0 +1,37 @@
+# Criterion.rs configuration
+#
+# This file allows customization of benchmark behavior without modifying code.
+# See: https://bheisler.github.io/criterion.rs/book/user_guide/advanced_configuration.html
+
+[output]
+# Directory for benchmark reports
+criterion_home = "target/criterion"
+
+# HTML report generation
+html_reports = true
+
+[plot]
+# Enable plotters backend for charts
+enabled = true
+
+[sampling]
+# Number of samples to collect for each benchmark (default: 100)
+# Increase for more statistical significance, decrease for faster runs
+sample_size = 100
+
+# Measurement time per benchmark (in seconds)
+measurement_time = 5
+
+# Warm-up time before measurement (in seconds)
+warm_up_time = 3
+
+# Noise threshold for detecting performance changes (default: 0.01 = 1%)
+noise_threshold = 0.01
+
+[significance]
+# Significance level for detecting performance changes (default: 0.05)
+significance_level = 0.05
+
+[baselines]
+# Automatically save baselines for comparison
+auto_save = true

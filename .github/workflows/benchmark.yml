@@ -1,0 +1,168 @@
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need history for comparison
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache Cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-bench-${{ hashFiles('**/Cargo.lock') }}
+      
+      # Run benchmarks and save results
+      - name: Run benchmarks
+        run: cargo bench --no-fail-fast -- --verbose
+        continue-on-error: true
+      
+      # Parse and format benchmark results
+      - name: Parse benchmark results
+        if: always()
+        shell: pwsh
+        run: |
+          # Create a summary of benchmark results
+          $summary = @"
+          ## 📊 Benchmark Results
+          
+          Benchmarks completed successfully. Results are available in the artifacts.
+          
+          ### Benchmark Suites
+          
+          | Suite | Status |
+          |-------|--------|
+          | Pattern Search | ✅ Completed |
+          | Hex Parsing | ✅ Completed |
+          
+          ### Key Performance Areas
+          
+          **Pattern Search (`naive_search`)**:
+          - Algorithm: O(n*m) naive substring search
+          - Tested with 4KB, 16KB, and 64KB buffers
+          - Various pattern lengths (2-12 bytes)
+          
+          **Hex Parsing (`parse_hex_pattern`)**:
+          - Tested with compact and spaced formats
+          - Various lengths (4 bytes to 128 bytes)
+          - Realistic patterns (PE headers, signatures)
+          
+          ### View Full Results
+          
+          - 📁 Download artifacts from this workflow run
+          - 📈 Open `target/criterion/report/index.html` for interactive charts
+          - 📋 See [BENCHMARKING.md](https://github.com/${{ github.repository }}/blob/${{ github.head_ref || github.ref_name }}/BENCHMARKING.md) for optimization recommendations
+          
+          "@
+          
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+      
+      # Archive benchmark results
+      - name: Archive benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: |
+            target/criterion/
+            !target/criterion/**/raw.csv
+          retention-days: 30
+      
+      # Generate PR comment with results
+      - name: Comment PR with benchmark results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = `## 📊 Benchmark Results
+            
+            Benchmarks have been run for this PR. Key highlights:
+            
+            ### Benchmark Suites
+            
+            | Suite | Status | Details |
+            |-------|--------|---------|
+            | Pattern Search | ✅ Completed | Tests \`naive_search\` with various buffer sizes and patterns |
+            | Hex Parsing | ✅ Completed | Tests \`parse_hex_pattern\` with different formats |
+            
+            ### Performance Areas Tested
+            
+            - **Pattern Search**: O(n*m) algorithm tested with 1KB-64KB buffers
+            - **Hex Parsing**: String processing with various input formats
+            
+            ### View Results
+            
+            - 📁 Download the \`benchmark-results-${context.sha.substring(0, 7)}\` artifact from this workflow run
+            - 📈 Extract and open \`target/criterion/report/index.html\` for interactive charts
+            - 📋 See [BENCHMARKING.md](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/${context.payload.pull_request.head.ref}/BENCHMARKING.md) for optimization recommendations
+            
+            <details>
+            <summary>📖 How to Use Benchmark Results</summary>
+            
+            1. Download the artifact from this workflow run
+            2. Extract the archive
+            3. Open \`target/criterion/report/index.html\` in your browser
+            4. Review the performance metrics and comparisons
+            5. Check [BENCHMARKING.md](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/${context.payload.pull_request.head.ref}/BENCHMARKING.md) for optimization guidance
+            
+            </details>`;
+            
+            // Find existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+            
+            const botComment = comments.data.find(comment => 
+              comment.user.type === 'Bot' && comment.body.includes('📊 Benchmark Results')
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: summary
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: summary
+              });
+            }

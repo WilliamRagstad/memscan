@@ -1,2 +1,6 @@
 /target
 *.log
+
+# Benchmark results
+/target/criterion/
+*.criterion.*.json
