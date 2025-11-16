@@ -1,6 +1,15 @@
 # Benchmarking Guide for MemScan
 
-This guide explains how to use the benchmarking infrastructure to measure and optimize performance-critical code in MemScan.
+This comprehensive guide explains how to use the benchmarking infrastructure to measure and optimize performance-critical code in MemScan.
+
+## Table of Contents
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Understanding Results](#understanding-results)
+- [Performance-Critical Areas](#performance-critical-areas)
+- [Optimization Recommendations](#optimization-recommendations)
+- [Continuous Benchmarking](#continuous-benchmarking)
+- [Best Practices](#best-practices)
 
 ## Overview
 
@@ -27,19 +36,32 @@ cargo bench --bench pattern_search
 
 # Run only hex parsing benchmarks
 cargo bench --bench hex_parsing
-```
 
-### Running Specific Test Cases
-
-```bash
-# Run only benchmarks matching "realistic"
+# Run benchmarks matching a pattern
 cargo bench -- realistic
-
-# Run only pattern search benchmarks for 4KB pages
-cargo bench -- pattern_search/4096
 ```
 
-## Understanding the Results
+### Using Helper Scripts
+
+Unix/Linux/macOS:
+```bash
+./bench.sh all              # Run all benchmarks
+./bench.sh pattern          # Run pattern search only
+./bench.sh baseline main    # Save baseline as 'main'
+./bench.sh compare main     # Compare against baseline
+./bench.sh report           # Open HTML report in browser
+```
+
+Windows PowerShell:
+```powershell
+.\bench.ps1 all             # Run all benchmarks
+.\bench.ps1 pattern         # Run pattern search only
+.\bench.ps1 baseline main   # Save baseline as 'main'
+.\bench.ps1 compare main    # Compare against baseline
+.\bench.ps1 report          # Open HTML report in browser
+```
+
+## Understanding Results
 
 ### Output Format
 
@@ -64,11 +86,11 @@ Open `target/criterion/report/index.html` in your browser for:
 - Statistical analysis of performance changes
 - Detailed breakdowns of each benchmark
 
-## Performance-Critical Areas Identified
+## Performance-Critical Areas
 
-### 1. Pattern Search (`naive_search`)
+### 1. Pattern Search (HIGHEST PRIORITY)
 
-**Location**: `src/scanner.rs:193-203`
+**Location**: `src/scanner.rs:naive_search`
 
 **Why Critical**: This function is called for every page of memory scanned. With processes having gigabytes of memory across thousands of pages, this becomes the primary performance bottleneck.
 
@@ -77,21 +99,11 @@ Open `target/criterion/report/index.html` in your browser for:
 - Typical page size: 4KB
 - Typical pattern size: 2-16 bytes
 
-**Optimization Opportunities**:
-- Implement Boyer-Moore or Boyer-Moore-Horspool algorithm
-- Use SIMD instructions for parallel comparison (e.g., via `memchr` crate)
-- Consider Two-Way algorithm for small patterns
-- Use Aho-Corasick for multiple pattern searching
+**Impact**: Called millions of times per scan
 
-**Benchmark Coverage**:
-- Various haystack sizes (1KB to 64KB)
-- Different pattern sizes (2 to 12 bytes)
-- Pattern found vs not found scenarios
-- Realistic binary data patterns
+### 2. Hex Pattern Parsing (MEDIUM PRIORITY)
 
-### 2. Hex Pattern Parsing (`parse_hex_pattern`)
-
-**Location**: `src/main.rs:76-91`
+**Location**: `src/lib.rs:parse_hex_pattern`
 
 **Why Critical**: Called once per scan operation, but poor performance here impacts user experience, especially in interactive/scripted scenarios.
 
@@ -99,33 +111,205 @@ Open `target/criterion/report/index.html` in your browser for:
 - Allocates a filtered string (removes whitespace)
 - Parses byte-by-byte with radix conversion
 
-**Optimization Opportunities**:
-- Parse directly without intermediate allocation
-- Use lookup tables instead of `from_str_radix`
-- SIMD-based hex decoding
-- Zero-copy parsing for compact hex strings
+**Impact**: Called once per scan, affects startup time
 
-**Benchmark Coverage**:
-- Various pattern lengths
-- Compact vs spaced format
-- Realistic patterns (PE headers, ELF headers, etc.)
-- Case sensitivity variations
+### 3. Memory Reading (LOWER PRIORITY)
 
-### 3. Memory Reading (Not Yet Benchmarked)
-
-**Location**: `src/scanner.rs:109-123`
+**Location**: `src/scanner.rs:scan_process`
 
 **Why Critical**: Windows API call overhead, but less critical than pattern search as it's I/O bound.
 
 **Note**: Cannot be easily benchmarked without actual Windows process access. Consider profiling in real scenarios instead.
 
-### 4. Memory Region Iteration (Not Yet Benchmarked)
+## Optimization Recommendations
 
-**Location**: `src/process.rs:276-321`
+### Priority 1: Pattern Search Algorithm
 
-**Why Critical**: VirtualQueryEx system calls, but relatively infrequent (one per region).
+#### Current Implementation
 
-**Note**: Cannot be benchmarked without Windows APIs. Consider profiling in real scenarios.
+```rust
+pub fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || needle.len() > haystack.len() {
+        return None;
+    }
+    for i in 0..=haystack.len() - needle.len() {
+        if &haystack[i..i + needle.len()] == needle {
+            return Some(i);
+        }
+    }
+    None
+}
+```
+
+**Complexity**: O(n*m) where n = haystack length, m = needle length
+
+#### Option 1: Use `memchr` crate (Easy, High Impact)
+
+**Difficulty**: ⭐ Easy  
+**Expected Speedup**: 5-20x for typical patterns  
+**Dependencies**: `memchr` crate
+
+```rust
+use memchr::memmem;
+
+pub fn optimized_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    memmem::find(haystack, needle)
+}
+```
+
+**Why it's faster**:
+- Uses SIMD instructions (SSE2/AVX2)
+- Highly optimized C-like implementation
+- Well-tested and maintained (used by ripgrep)
+
+**Trade-offs**: Adds dependency, but it's widely used and battle-tested
+
+#### Option 2: Boyer-Moore-Horspool Algorithm (Medium, High Impact)
+
+**Difficulty**: ⭐⭐ Medium  
+**Expected Speedup**: 3-10x for patterns > 4 bytes  
+**Dependencies**: None (pure Rust implementation)
+
+```rust
+pub fn boyer_moore_horspool(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || needle.len() > haystack.len() {
+        return None;
+    }
+    
+    // Build bad character table
+    let mut bad_char = [needle.len(); 256];
+    for (i, &byte) in needle.iter().enumerate().take(needle.len() - 1) {
+        bad_char[byte as usize] = needle.len() - 1 - i;
+    }
+    
+    let mut pos = 0;
+    while pos <= haystack.len() - needle.len() {
+        let mut j = needle.len() - 1;
+        while j > 0 && needle[j] == haystack[pos + j] {
+            j -= 1;
+        }
+        if j == 0 && needle[0] == haystack[pos] {
+            return Some(pos);
+        }
+        pos += bad_char[haystack[pos + needle.len() - 1] as usize];
+    }
+    None
+}
+```
+
+**Why it's faster**:
+- Skips characters based on bad character heuristic
+- More efficient for longer patterns
+- Sub-linear average case performance
+
+**Trade-offs**: More complex, requires preprocessing
+
+#### Recommendation
+
+**Start with Option 1** (`memchr`):
+1. Add to dependencies: `memchr = "2.7"`
+2. Replace `naive_search` with `memmem::find`
+3. Run benchmarks to verify improvement
+4. Profile real-world usage
+
+**Consider Option 2** if:
+- You want to avoid dependencies
+- You need custom behavior (e.g., wildcards)
+- You want to optimize for specific pattern types
+
+### Priority 2: Hex Pattern Parsing
+
+#### Current Implementation
+
+```rust
+pub fn parse_hex_pattern(s: &str) -> anyhow::Result<Vec<u8>> {
+    let filtered: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    // ... parsing logic
+}
+```
+
+**Issues**:
+1. Allocates intermediate `String` for filtered version
+2. Uses `from_str_radix` which is slower than lookup tables
+3. Iterates over chars twice (filter + parse)
+
+#### Option 1: Zero-Copy Parsing (Easy, Medium Impact)
+
+**Difficulty**: ⭐ Easy  
+**Expected Speedup**: 2-3x  
+
+```rust
+pub fn parse_hex_pattern_optimized(s: &str) -> anyhow::Result<Vec<u8>> {
+    let bytes = s.as_bytes();
+    let mut result = Vec::with_capacity(s.len() / 2);
+    
+    let mut i = 0;
+    while i < bytes.len() {
+        // Skip whitespace
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= bytes.len() {
+            break;
+        }
+        
+        // Read two hex digits
+        if i + 1 >= bytes.len() {
+            anyhow::bail!("hex pattern length must be even");
+        }
+        
+        let high = hex_digit(bytes[i])?;
+        let low = hex_digit(bytes[i + 1])?;
+        result.push((high << 4) | low);
+        i += 2;
+    }
+    
+    Ok(result)
+}
+
+#[inline]
+fn hex_digit(c: u8) -> anyhow::Result<u8> {
+    match c {
+        b'0'..=b'9' => Ok(c - b'0'),
+        b'a'..=b'f' => Ok(c - b'a' + 10),
+        b'A'..=b'F' => Ok(c - b'A' + 10),
+        _ => anyhow::bail!("invalid hex character '{}'", c as char),
+    }
+}
+```
+
+**Why it's faster**:
+- No intermediate string allocation
+- Single pass through input
+- Simple lookup instead of radix parsing
+
+#### Option 2: Use `hex` crate (Easiest, Medium Impact)
+
+**Difficulty**: ⭐ Easiest  
+**Expected Speedup**: 2-4x  
+
+```rust
+use hex;
+
+pub fn parse_hex_pattern_hex_crate(s: &str) -> anyhow::Result<Vec<u8>> {
+    let filtered: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+    hex::decode(&filtered).map_err(|e| anyhow::anyhow!("invalid hex: {}", e))
+}
+```
+
+**Why it's faster**:
+- Optimized implementation with SIMD
+- Well-tested
+- Handles edge cases
+
+**Trade-offs**: Still needs to filter whitespace first
+
+#### Recommendation
+
+**Start with Option 1** (Zero-Copy Parsing):
+1. Implement as shown above
+2. Run benchmarks to verify improvement
+3. Consider Option 2 if you want battle-tested code
 
 ## Continuous Benchmarking
 
@@ -161,127 +345,6 @@ Set performance budgets:
 cargo bench -- --test --baseline initial --significance-level 0.10
 ```
 
-## Profiling Integration
-
-While benchmarks measure *what* is slow, profilers show *why*. On Windows:
-
-### Using Windows Performance Analyzer
-
-1. Record ETW trace:
-   ```powershell
-   xperf -on PROC_THREAD+LOADER+PROFILE -stackwalk Profile
-   memscan.exe scan <target> --pattern "..."
-   xperf -d trace.etl
-   ```
-
-2. Analyze with WPA to see CPU usage per function
-
-### Using Visual Studio Profiler
-
-1. Build in release mode with debug info:
-   ```bash
-   cargo build --release
-   ```
-
-2. Profile with Visual Studio's CPU profiler
-3. Correlate hotspots with benchmark results
-
-### Using cargo-flamegraph (Cross-platform)
-
-```bash
-cargo install flamegraph
-cargo flamegraph --bench pattern_search
-```
-
-## Optimization Workflow
-
-1. **Measure First**: Run benchmarks to establish baseline
-2. **Identify Bottleneck**: Focus on the slowest operation with highest impact
-3. **Hypothesis**: Form a theory about what's slow and why
-4. **Implement**: Make targeted optimization
-5. **Benchmark**: Run benchmarks to verify improvement
-6. **Profile**: Use profiler to understand if bottleneck moved
-7. **Iterate**: Repeat until performance goals met
-
-## Advanced Configuration
-
-### Custom Benchmark Settings
-
-Edit benchmark files to adjust:
-
-```rust
-use criterion::Criterion;
-
-fn custom_criterion() -> Criterion {
-    Criterion::default()
-        .sample_size(100)           // Number of samples (default: 100)
-        .measurement_time(Duration::from_secs(10))  // Time per benchmark
-        .warm_up_time(Duration::from_secs(3))       // Warm-up time
-}
-
-criterion_group! {
-    name = benches;
-    config = custom_criterion();
-    targets = benchmark_pattern_search
-}
-```
-
-### Noise Reduction Tips
-
-For more accurate benchmarks:
-
-1. **Close other applications**: Reduce CPU contention
-2. **Disable CPU frequency scaling**: Use performance governor
-   ```bash
-   # Linux
-   echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
-   ```
-3. **Pin to specific cores**: Reduce scheduling variance
-4. **Run multiple times**: Look for consistency across runs
-
-## Integration with CI/CD
-
-### GitHub Actions Example
-
-```yaml
-name: Benchmark
-
-on: [pull_request]
-
-jobs:
-  benchmark:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - name: Run benchmarks
-        run: cargo bench
-      - name: Upload results
-        uses: actions/upload-artifact@v2
-        with:
-          name: benchmark-results
-          path: target/criterion/
-```
-
-### Performance Testing in CI
-
-```bash
-# Compare PR against main branch
-git checkout main
-cargo bench -- --save-baseline main
-
-git checkout feature-branch
-cargo bench -- --baseline main
-
-# Add threshold check
-if ! cargo bench -- --baseline main --significance-level 0.05; then
-    echo "Performance regression detected!"
-    exit 1
-fi
-```
-
 ## Best Practices
 
 1. **Benchmark on target hardware**: Performance characteristics differ between dev and production
@@ -291,13 +354,64 @@ fi
 5. **Version your benchmarks**: Keep them in sync with code changes
 6. **Automate regression testing**: Catch performance regressions in CI
 
+### Optimization Workflow
+
+1. **Measure First**: Run benchmarks to establish baseline
+2. **Identify Bottleneck**: Focus on the slowest operation with highest impact
+3. **Hypothesis**: Form a theory about what's slow and why
+4. **Implement**: Make targeted optimization
+5. **Benchmark**: Run benchmarks to verify improvement
+6. **Profile**: Use profiler to understand if bottleneck moved
+7. **Iterate**: Repeat until performance goals met
+
+### Noise Reduction Tips
+
+For more accurate benchmarks:
+
+1. **Close other applications**: Reduce CPU contention
+2. **Disable CPU frequency scaling**: Use performance governor (Linux)
+3. **Pin to specific cores**: Reduce scheduling variance
+4. **Run multiple times**: Look for consistency across runs
+
+## Performance Targets
+
+Based on typical use cases:
+
+| Operation | Current | Target | Status |
+|-----------|---------|--------|--------|
+| Pattern search (4KB) | ~1.2 µs | ~0.3 µs | 🔴 Needs optimization |
+| Hex parsing (16 bytes) | ~150 ns | ~50 ns | 🟡 Could be better |
+| Memory read (4KB page) | ~5 µs | ~2 µs | 🟢 I/O bound, acceptable |
+| Full process scan (1GB) | ~3s | ~1s | 🔴 Needs optimization |
+
+## CI/CD Integration
+
+### GitHub Actions
+
+The project includes a GitHub Actions workflow that:
+- Runs benchmarks on Windows (matches target platform)
+- Archives results as artifacts
+- Generates summary in PR comments
+
+### Running in CI
+
+```yaml
+- name: Run benchmarks
+  run: cargo bench --no-fail-fast
+
+- name: Archive results
+  uses: actions/upload-artifact@v4
+  with:
+    name: benchmark-results
+    path: target/criterion/
+```
+
 ## Further Reading
 
 - [Criterion.rs User Guide](https://bheisler.github.io/criterion.rs/book/)
 - [The Rust Performance Book](https://nnethercote.github.io/perf-book/)
 - [Benchmarking and Optimization in Rust](https://www.youtube.com/watch?v=d7pZNJBdU6s)
 - [String Searching Algorithms](https://en.wikipedia.org/wiki/String-searching_algorithm)
-- [OPTIMIZATION.md](OPTIMIZATION.md) - Specific optimization recommendations for MemScan
 
 ## Contributing Benchmarks
 

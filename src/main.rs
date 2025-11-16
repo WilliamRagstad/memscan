@@ -1,19 +1,10 @@
 #[cfg(not(target_os = "windows"))]
 compile_error!("This program only supports Windows.");
 
-mod cli;
-mod handle;
-mod memoryapi;
-mod process;
-mod scanner;
-
 use clap::Parser;
-use cli::{Cli, Command};
+use memscan::{cli::{Cli, Command}, process, scanner::{ScanOptions, scan_process}, parse_hex_pattern};
 use owo_colors::OwoColorize;
-use process::{open_process, query_system_info};
-use scanner::{ScanOptions, scan_process};
-
-use crate::process::find_process_by_name;
+use process::{open_process, query_system_info, find_process_by_name};
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -69,23 +60,4 @@ fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
-}
-
-/// Parse a hex string like "DEADBEEF" or "DEADBEEF" into bytes.
-#[cfg(windows)]
-fn parse_hex_pattern(s: &str) -> anyhow::Result<Vec<u8>> {
-    let filtered: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-
-    if filtered.len() % 2 != 0 {
-        anyhow::bail!("hex pattern length must be even");
-    }
-
-    let mut bytes = Vec::with_capacity(filtered.len() / 2);
-    for i in (0..filtered.len()).step_by(2) {
-        let byte_str = &filtered[i..i + 2];
-        let b = u8::from_str_radix(byte_str, 16)
-            .map_err(|_| anyhow::anyhow!("invalid hex byte '{}'", byte_str))?;
-        bytes.push(b);
-    }
-    Ok(bytes)
 }

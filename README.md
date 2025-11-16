@@ -32,12 +32,7 @@ cargo bench
 
 ### Performance Benchmarking
 
-MemScan includes comprehensive benchmarking infrastructure using Criterion.rs. See [BENCHMARKING.md](BENCHMARKING.md) for detailed information on:
-
-- Running benchmarks for pattern search and hex parsing
-- Understanding performance metrics
-- Identifying optimization opportunities
-- Continuous performance testing
+MemScan includes comprehensive benchmarking infrastructure using Criterion.rs. For detailed information, see [BENCHMARKING.md](BENCHMARKING.md).
 
 Quick start:
 ```sh
@@ -46,8 +41,6 @@ cargo bench --bench pattern_search   # Run specific benchmark
 ./bench.sh report                     # Open HTML report (Unix)
 .\bench.ps1 report                    # Open HTML report (Windows)
 ```
-
-For optimization recommendations, see [OPTIMIZATION.md](OPTIMIZATION.md).
 
 ## Usage
 

@@ -4,24 +4,7 @@
 //! user input like "DEADBEEF" or "4D 5A 90 00" into byte arrays.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-
-/// Parse a hex string like "DEADBEEF" or "4D 5A 90 00" into bytes.
-fn parse_hex_pattern(s: &str) -> Result<Vec<u8>, String> {
-    let filtered: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-
-    if filtered.len() % 2 != 0 {
-        return Err("hex pattern length must be even".to_string());
-    }
-
-    let mut bytes = Vec::with_capacity(filtered.len() / 2);
-    for i in (0..filtered.len()).step_by(2) {
-        let byte_str = &filtered[i..i + 2];
-        let b = u8::from_str_radix(byte_str, 16)
-            .map_err(|_| format!("invalid hex byte '{}'", byte_str))?;
-        bytes.push(b);
-    }
-    Ok(bytes)
-}
+use memscan::parse_hex_pattern;
 
 fn benchmark_hex_parsing(c: &mut Criterion) {
     let mut group = c.benchmark_group("hex_parsing");

@@ -3,6 +3,14 @@ name = "memscan"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "memscan"
+path = "src/lib.rs"
+
+[[bin]]
+name = "memscan"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4.5.51", features = ["derive", "wrap_help"] }

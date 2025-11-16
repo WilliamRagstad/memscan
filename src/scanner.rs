@@ -190,7 +190,7 @@ pub fn scan_process(
 }
 
 /// Very simple O(n*m) pattern matcher sufficient for now.
-fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+pub fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || needle.len() > haystack.len() {
         return None;
     }
@@ -200,4 +200,44 @@ fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_naive_search_found() {
+        let haystack = b"hello world";
+        let needle = b"world";
+        assert_eq!(naive_search(haystack, needle), Some(6));
+    }
+
+    #[test]
+    fn test_naive_search_not_found() {
+        let haystack = b"hello world";
+        let needle = b"rust";
+        assert_eq!(naive_search(haystack, needle), None);
+    }
+
+    #[test]
+    fn test_naive_search_at_start() {
+        let haystack = b"hello world";
+        let needle = b"hello";
+        assert_eq!(naive_search(haystack, needle), Some(0));
+    }
+
+    #[test]
+    fn test_naive_search_empty_needle() {
+        let haystack = b"hello world";
+        let needle = b"";
+        assert_eq!(naive_search(haystack, needle), None);
+    }
+
+    #[test]
+    fn test_naive_search_binary_pattern() {
+        let haystack = b"\x4D\x5A\x90\x00\x03\x00\x00\x00";
+        let needle = b"\x4D\x5A\x90\x00";
+        assert_eq!(naive_search(haystack, needle), Some(0));
+    }
 }

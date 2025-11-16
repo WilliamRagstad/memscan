@@ -4,19 +4,7 @@
 //! when scanning large memory regions for byte patterns.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-
-/// Simple O(n*m) pattern matcher - copy from scanner.rs
-fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || needle.len() > haystack.len() {
-        return None;
-    }
-    for i in 0..=haystack.len() - needle.len() {
-        if &haystack[i..i + needle.len()] == needle {
-            return Some(i);
-        }
-    }
-    None
-}
+use memscan::scanner::naive_search;
 
 fn benchmark_pattern_search(c: &mut Criterion) {
     let mut group = c.benchmark_group("pattern_search");
