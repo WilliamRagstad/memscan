@@ -1,33 +1,49 @@
-#![cfg(windows)]
-
-use crate::handle::AutoCloseHandle;
-use crate::process::{
-    MemoryRegion, MemoryRegionIterator, SystemInfo, protect_to_str, state_to_str, type_to_str,
-};
-use anyhow::Result;
-use owo_colors::OwoColorize;
-use std::cmp::min;
-use winapi::{
-    shared::{
-        basetsd::SIZE_T,
-        minwindef::{LPCVOID, LPVOID},
-    },
-    um::memoryapi::ReadProcessMemory,
-};
-
-pub struct ScanOptions<'a> {
-    pub pattern: Option<&'a [u8]>,
-    pub verbose: u8,
-    pub all_modules: bool,
+/// Very simple O(n*m) pattern matcher sufficient for now.
+/// This is platform-independent and can be used in benchmarks.
+pub fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || needle.len() > haystack.len() {
+        return None;
+    }
+    for i in 0..=haystack.len() - needle.len() {
+        if &haystack[i..i + needle.len()] == needle {
+            return Some(i);
+        }
+    }
+    None
 }
 
-/// Perform static, single-pass scan all readable regions.
-pub fn scan_process(
-    proc: &AutoCloseHandle,
-    sys: &SystemInfo,
-    opts: &ScanOptions<'_>,
-    modules: &[MemoryRegion],
-) -> Result<()> {
+// Platform-specific code below (Windows only)
+#[cfg(windows)]
+mod windows_impl {
+    use crate::handle::AutoCloseHandle;
+    use crate::process::{
+        MemoryRegion, MemoryRegionIterator, SystemInfo, protect_to_str, state_to_str, type_to_str,
+    };
+    use super::naive_search;
+    use anyhow::Result;
+    use owo_colors::OwoColorize;
+    use std::cmp::min;
+    use winapi::{
+        shared::{
+            basetsd::SIZE_T,
+            minwindef::{LPCVOID, LPVOID},
+        },
+        um::memoryapi::ReadProcessMemory,
+    };
+
+    pub struct ScanOptions<'a> {
+        pub pattern: Option<&'a [u8]>,
+        pub verbose: u8,
+        pub all_modules: bool,
+    }
+
+    /// Perform static, single-pass scan all readable regions.
+    pub fn scan_process(
+        proc: &AutoCloseHandle,
+        sys: &SystemInfo,
+        opts: &ScanOptions<'_>,
+        modules: &[MemoryRegion],
+    ) -> Result<()> {
     let page_size = sys.page_size;
     let mut page_buf = vec![0u8; page_size];
 
@@ -187,20 +203,12 @@ pub fn scan_process(
     );
 
     Ok(())
+    }
 }
 
-/// Very simple O(n*m) pattern matcher sufficient for now.
-pub fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || needle.len() > haystack.len() {
-        return None;
-    }
-    for i in 0..=haystack.len() - needle.len() {
-        if &haystack[i..i + needle.len()] == needle {
-            return Some(i);
-        }
-    }
-    None
-}
+// Re-export Windows-specific types and functions when on Windows
+#[cfg(windows)]
+pub use windows_impl::{ScanOptions, scan_process};
 
 #[cfg(test)]
 mod tests {

@@ -4,10 +4,15 @@
 //! allowing benchmark code to use the real implementations instead of copies.
 
 pub mod cli;
-pub mod handle;
-pub mod memoryapi;
-pub mod process;
 pub mod scanner;
+
+// Windows-specific modules
+#[cfg(windows)]
+pub mod handle;
+#[cfg(windows)]
+pub mod memoryapi;
+#[cfg(windows)]
+pub mod process;
 
 use anyhow::Result;
 

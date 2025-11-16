@@ -1,3 +1,4 @@
+#![cfg(windows)]
 #![allow(non_snake_case, dead_code)]
 use crate::handle::AutoCloseHandle;
 use anyhow::Result;

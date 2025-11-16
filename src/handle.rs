@@ -1,3 +1,5 @@
+#![cfg(windows)]
+
 use winapi::um::{handleapi::CloseHandle, winnt::HANDLE};
 
 pub struct AutoCloseHandle(pub HANDLE);
