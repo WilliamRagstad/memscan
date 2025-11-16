@@ -4,3 +4,7 @@
 # Benchmark results
 /target/criterion/
 *.criterion.*.json
+
+# Test and verification binaries
+verify_lib_structure
+/tmp/
