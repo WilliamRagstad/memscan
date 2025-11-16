@@ -3,44 +3,14 @@ name = "memscan"
 version = "0.1.0"
 edition = "2024"
 
-[lib]
-name = "memscan"
-path = "src/lib.rs"
-
-[[bin]]
-name = "memscan"
-path = "src/main.rs"
-
 [dependencies]
-anyhow = "1.0.100"
+libmemscan = { path = "libmemscan" }
 clap = { version = "4.5.51", features = ["derive", "wrap_help"] }
 owo-colors = "4.2.3"
+anyhow = "1.0.100"
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = [
-	"winuser",
-	"memoryapi",
-	"sysinfoapi",
-	"processthreadsapi",
-	"handleapi",
-	"winbase",
-	"tlhelp32",
-	"psapi",
-] }
-
-[dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
-divan = "0.1"
-
-[[bench]]
-name = "pattern_search"
-harness = false
-
-[[bench]]
-name = "hex_parsing"
-harness = false
-
-[profile.bench]
+[profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
+strip = true

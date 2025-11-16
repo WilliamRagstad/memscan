@@ -1,9 +1,5 @@
-#![cfg(windows)]
-
-use crate::handle::AutoCloseHandle;
-use crate::process::{
-    MemoryRegion, MemoryRegionIterator, SystemInfo, protect_to_str, state_to_str, type_to_str,
-};
+use crate::process::ProcessHandle;
+use crate::process::{MemoryRegion, MemoryRegionIterator, SystemInfo};
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use std::cmp::min;
@@ -23,7 +19,7 @@ pub struct ScanOptions<'a> {
 
 /// Perform static, single-pass scan all readable regions.
 pub fn scan_process(
-    proc: &AutoCloseHandle,
+    proc: &ProcessHandle,
     sys: &SystemInfo,
     opts: &ScanOptions<'_>,
     modules: &[MemoryRegion],
@@ -84,9 +80,9 @@ pub fn scan_process(
                 region.base_address,
                 region.base_address + region.size,
                 region.size / 1024,
-                type_to_str(region.type_).green(),
-                state_to_str(region.state).green(),
-                protect_to_str(region.protect).green(),
+                region.type_.green(),
+                region.state.green(),
+                region.protect.green(),
                 current_module_name.unwrap_or("unknown").magenta()
             );
         } else if opts.verbose > 0 {
@@ -190,6 +186,7 @@ pub fn scan_process(
 }
 
 /// Very simple O(n*m) pattern matcher sufficient for now.
+/// This is platform-independent and can be used in benchmarks.
 pub fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || needle.len() > haystack.len() {
         return None;

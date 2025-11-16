@@ -1,6 +1,7 @@
 //! Required functions not included in the winapi crate
 //! See: https://github.com/retep998/winapi-rs/blob/5b1829956ef645f3c2f8236ba18bb198ca4c2468/src/um/memoryapi.rs#L344-L383
 
+#![cfg(windows)]
 #![allow(non_snake_case, dead_code)]
 use winapi::{
     shared::{

@@ -1,10 +1,52 @@
-#[cfg(not(target_os = "windows"))]
-compile_error!("This program only supports Windows.");
-
-use clap::Parser;
-use memscan::{cli::{Cli, Command}, process, scanner::{ScanOptions, scan_process}, parse_hex_pattern};
+use clap::{Parser, Subcommand, ValueHint, builder::styling::AnsiColor};
+use libmemscan::{
+    parse_hex_pattern,
+    process::{find_process_by_name, get_process_module_regions, open_process, query_system_info},
+    scanner::{ScanOptions, scan_process},
+};
 use owo_colors::OwoColorize;
-use process::{open_process, query_system_info, find_process_by_name};
+
+/// MemScan – inspect another process's virtual memory.
+#[derive(Parser, Debug)]
+#[command(
+    name = "memscan",
+	bin_name = "memscan",
+    about = "A simple Windows process memory scanner",
+    version,
+    propagate_version = true,
+    arg_required_else_help = true,
+	styles = clap::builder::Styles::styled()
+		.header(AnsiColor::BrightYellow.on_default())
+        .usage(AnsiColor::BrightYellow.on_default())
+        .literal(AnsiColor::BrightGreen.on_default())
+        .placeholder(AnsiColor::BrightCyan.on_default())
+)]
+pub struct Cli {
+    /// Increase verbosity (-v, -vv, -vvv)
+    #[arg(short, long, global = true, action = clap::ArgAction::Count)]
+    pub verbose: u8,
+
+    #[command(subcommand)]
+    pub command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Command {
+    /// Scan a process's memory regions
+    Scan {
+        /// Target process executable name or id (e.g. "notepad", "notepad.exe", or 1234)
+        target: String,
+
+        /// Optional hex pattern to search for (e.g. "DEADBEEF")
+        #[arg(short, long, value_hint = ValueHint::Other)]
+        pattern: Option<String>,
+
+        /// Scan all modules, including those not originating from the target process
+        /// (by default, only the process's own modules are scanned)
+        #[arg(long)]
+        all_modules: bool,
+    },
+}
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -41,7 +83,7 @@ fn main() -> anyhow::Result<()> {
                 sys.granularity
             );
 
-            let modules = process::get_process_module_regions(&proc)?;
+            let modules = get_process_module_regions(&proc)?;
             println!(
                 "{} found {} module regions",
                 "[info]".bright_cyan(),
