@@ -1,16 +1,23 @@
+//! No direct Windows or Linux API usage here; platform-specific reads are in OS modules
+
 use crate::process::ProcessHandle;
 use crate::process::{MemoryRegion, MemoryRegionIterator, SystemInfo};
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use std::cmp::min;
-use winapi::{
-    shared::{
-        basetsd::SIZE_T,
-        minwindef::{LPCVOID, LPVOID},
-    },
-    um::memoryapi::ReadProcessMemory,
-};
 
+#[cfg(unix)]
+use crate::linux;
+#[cfg(windows)]
+use crate::windows;
+
+// Small cross-platform wrapper that dispatches to OS-specific process memory readers.
+fn os_read_process_memory(proc: &ProcessHandle, addr: usize, buf: &mut [u8]) -> usize {
+    #[cfg(windows)]
+    return windows::process::read_process_memory(proc, addr, buf);
+    #[cfg(unix)]
+    return linux::process::read_process_memory(proc, addr, buf);
+}
 pub struct ScanOptions<'a> {
     pub pattern: Option<&'a [u8]>,
     pub verbose: u8,
@@ -98,25 +105,12 @@ pub fn scan_process(
         let mut offset = 0usize;
         while offset < region.size {
             let to_read = min(page_size, region.size - offset);
-            let remote_addr = (region.base_address + offset) as LPCVOID;
-
-            let ok = unsafe {
-                let mut bytes_read: SIZE_T = 0;
-                let res = ReadProcessMemory(
-                    proc.raw(),
-                    remote_addr,
-                    page_buf.as_mut_ptr() as LPVOID,
-                    to_read as SIZE_T,
-                    &mut bytes_read as *mut SIZE_T,
-                );
-                if res == 0 || bytes_read == 0 {
-                    false
-                } else {
-                    // Shrink buffer view logically to bytes_read
-                    // (underlying vec stays allocated)
-                    true
-                }
-            };
+            let read_n = os_read_process_memory(
+                proc,
+                region.base_address + offset,
+                &mut page_buf[..to_read],
+            );
+            let ok = read_n > 0;
 
             if ok {
                 total_bytes += to_read;
@@ -198,6 +192,8 @@ pub fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     }
     None
 }
+
+// no extra helpers needed on UNIX; we call ProcessHandleUnix::read_mem directly
 
 #[cfg(test)]
 mod tests {

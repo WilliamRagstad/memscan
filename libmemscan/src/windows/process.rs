@@ -8,11 +8,11 @@ use std::mem::{MaybeUninit, size_of, transmute};
 use winapi::{
     shared::{
         basetsd::SIZE_T,
-        minwindef::{DWORD, FALSE, HMODULE, LPCVOID, MAX_PATH},
+        minwindef::{DWORD, FALSE, HMODULE, LPCVOID, LPVOID, MAX_PATH},
     },
     um::{
         handleapi::CloseHandle,
-        memoryapi::VirtualQueryEx,
+        memoryapi::{ReadProcessMemory, VirtualQueryEx},
         processthreadsapi::OpenProcess,
         psapi::{EnumProcessModules, GetModuleFileNameExA, GetModuleInformation, MODULEINFO},
         sysinfoapi::{GetNativeSystemInfo, SYSTEM_INFO},
@@ -294,5 +294,20 @@ pub(crate) fn memory_region_iterator_next(
         });
     } else {
         return None;
+    }
+}
+
+/// Read process memory into the provided buffer. Returns the number of bytes read (0 on failure).
+pub(crate) fn read_process_memory(proc: &ProcessHandleWin, addr: usize, buf: &mut [u8]) -> usize {
+    unsafe {
+        let mut bytes_read: SIZE_T = 0;
+        let res = ReadProcessMemory(
+            proc.raw(),
+            addr as LPCVOID,
+            buf.as_mut_ptr() as LPVOID,
+            buf.len() as SIZE_T,
+            &mut bytes_read as *mut SIZE_T,
+        );
+        if res == 0 { 0 } else { bytes_read as usize }
     }
 }
