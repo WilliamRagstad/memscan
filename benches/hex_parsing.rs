@@ -70,7 +70,7 @@ fn benchmark_hex_parsing_realistic(c: &mut Criterion) {
 fn benchmark_hex_parsing_variations(c: &mut Criterion) {
     let mut group = c.benchmark_group("hex_parsing_variations");
 
-    let base_pattern = "DEADBEEF";
+    let _base_pattern = "DEADBEEF";
 
     // Compare different whitespace patterns
     let variations = [

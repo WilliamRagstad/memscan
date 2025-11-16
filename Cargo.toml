@@ -14,3 +14,20 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+[dev-dependencies]
+libmemscan = { path = "libmemscan" }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "pattern_search"
+harness = false
+
+[[bench]]
+name = "hex_parsing"
+harness = false
+
+[profile.bench]
+opt-level = 3
+lto = true
+codegen-units = 1

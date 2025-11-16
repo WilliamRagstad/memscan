@@ -11,7 +11,7 @@ fn benchmark_pattern_search(c: &mut Criterion) {
 
     // Test with different haystack sizes to understand scaling behavior
     for size in [1024, 4096, 16384, 65536].iter() {
-        // Prepare test data
+        // Prepare all test data
         let haystack = vec![0u8; *size];
         let pattern_short = b"MZ"; // Common PE header pattern
         let pattern_medium = b"\x4D\x5A\x90\x00"; // MZ header with padding
