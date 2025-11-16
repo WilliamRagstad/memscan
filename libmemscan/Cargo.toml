@@ -1,0 +1,37 @@
+[package]
+name = "libmemscan"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+anyhow = "1.0.100"
+owo-colors = "4.2.3"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+	"winuser",
+	"memoryapi",
+	"sysinfoapi",
+	"processthreadsapi",
+	"handleapi",
+	"winbase",
+	"tlhelp32",
+	"psapi",
+] }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "pattern_search"
+harness = false
+
+[[bench]]
+name = "hex_parsing"
+harness = false
+
+[profile.bench]
+opt-level = 3
+lto = true
+codegen-units = 1
