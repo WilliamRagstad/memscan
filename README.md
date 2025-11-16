@@ -1,40 +1,24 @@
 # MemScan
 
-A simple memory scanning tool for Windows process debugging, dynamic analysis, and reverse engineering purposes.
-All functionalities are implemented using User-Mode Windows APIs, no kernel-mode components are required.
+A simple memory scanning tool for **Windows** and **Linux** process debugging, dynamic analysis, and reverse engineering purposes.
+The functionality is implemented using only user-mode APIs. However, elevated privileges may still be required.
 
 ## Features
 
-- [ ] Scan a process's memory for specific byte patterns.
-- [ ] Cross-platform support (currently only Windows is implemented).
-- [ ] Support for scanning large memory regions efficiently.
-- [ ] Configurable scanning options (e.g., case sensitivity, wildcards).
-- [ ] Scriptable interface for automating scans with Python.
-- [ ] Identify dynamic memory regions (e.g., stack, all heaps, allocated virtual pages).
-- [ ] Filter memory regions based on module ownership.
+- [X] Scan a process's memory for specific byte patterns
+- [X] Cross-platform support
+- [ ] Support for scanning large memory regions efficiently
+- [ ] Configurable scanning options (e.g., case sensitivity, wildcards)
+- [ ] Python bindings for scriptable (automated) scans
+- [ ] Identify dynamic memory regions (e.g., images, stack, all heaps, allocated virtual pages)
+- [X] Filter memory regions based on module ownership
 
-## Development
+## Performance Benchmarking
 
-### Building and Testing
-
-**Note**: The main application requires Windows to build. However, benchmarks can run on any platform since they test isolated algorithms.
-
-On Windows:
-```sh
-cargo build --release
-cargo test
-```
-
-On any platform (for benchmarks only):
-```sh
-cargo bench
-```
-
-### Performance Benchmarking
-
-MemScan includes comprehensive benchmarking infrastructure using Criterion.rs. For detailed information, see [BENCHMARKING.md](BENCHMARKING.md).
+MemScan includes comprehensive benchmarking infrastructure using `Criterion.rs`. For detailed information, see [BENCHMARKING.md](BENCHMARKING.md).
 
 Quick start:
+
 ```sh
 cargo bench                           # Run all benchmarks
 cargo bench --bench pattern_search   # Run specific benchmark
@@ -108,7 +92,7 @@ $ memscan scan notepad --pattern "4D 5A 90 00" -vv
 
 The key Windows API is `VirtualQueryEx`, which retrieves information about a range of pages in the virtual address space of **a specified process**. Efficiently scanning a process's memory regions is done via a shared object mapping through  `CreateFileMapping` and `MapViewOfFile` into pre-allocated local pages.
 
-- Functions
+- Windows Functions
   - `GetNativeSystemInfo`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getnativesysteminfo), [winapi](https://docs.rs/winapi/latest/winapi/um/sysinfoapi/fn.GetNativeSystemInfo.html)
   - `EnumProcessModules`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-enumprocessmodules), [winapi](https://docs.rs/winapi/latest/winapi/um/psapi/fn.EnumProcessModules.html)
   - `GetModuleInformation`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-getmoduleinformation), [winapi](https://docs.rs/winapi/latest/winapi/um/psapi/fn.GetModuleInformation.html)
@@ -120,7 +104,7 @@ The key Windows API is `VirtualQueryEx`, which retrieves information about a ran
   - `MapViewOfFile`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile), [winapi](https://docs.rs/winapi/latest/winapi/um/memoryapi/fn.MapViewOfFile.html)
   - `MapViewOfFileEx`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffileex), [winapi](https://docs.rs/winapi/latest/winapi/um/memoryapi/fn.MapViewOfFileEx.html)
   - `MapViewOfFile2`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile2)
-- Structures
+- Windows Structures
   - `SYSTEM_INFO`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/ns-sysinfoapi-system_info), [winapi](https://docs.rs/winapi/latest/winapi/um/sysinfoapi/struct.SYSTEM_INFO.html)
   - `MODULEINFO`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-moduleinfo), [winapi](https://docs.rs/winapi/latest/winapi/um/psapi/struct.MODULEINFO.html)
   - `MEMORY_BASIC_INFORMATION`: [msdn](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information), [winapi](https://docs.rs/winapi/latest/winapi/um/winnt/struct.MEMORY_BASIC_INFORMATION.html)
