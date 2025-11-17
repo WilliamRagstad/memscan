@@ -7,6 +7,8 @@ The functionality is implemented using only user-mode APIs. However, elevated pr
 
 - [X] Scan a process's memory for specific byte patterns
 - [X] Cross-platform support
+- [X] **Memory mapping for instant change detection**
+- [X] **Parallel diffing of watched memory regions**
 - [ ] Support for scanning large memory regions efficiently
 - [ ] Configurable scanning options (e.g., case sensitivity, wildcards)
 - [ ] Python bindings for scriptable (automated) scans
@@ -22,8 +24,33 @@ Quick start:
 ```sh
 cargo bench                           # Run all benchmarks
 cargo bench --bench pattern_search   # Run specific benchmark
+cargo bench --bench memory_mapping   # Benchmark memory mapping
 ./bench.sh report                     # Open HTML report (Unix)
 .\bench.ps1 report                    # Open HTML report (Windows)
+```
+
+## Memory Mapping
+
+MemScan supports memory mapping for efficient change detection. This allows you to:
+- Map remote process memory pages into the local process
+- Detect memory changes by comparing snapshots
+- Parallelize diffing across multiple watched regions
+
+For detailed information, see [MEMORY_MAPPING.md](MEMORY_MAPPING.md).
+
+Quick example:
+
+```rust
+use libmemscan::process::open_process;
+use libmemscan::diff::ChangeDetector;
+
+let proc = open_process(pid)?;
+let mut detector = ChangeDetector::new();
+detector.initialize(&proc, &regions)?;
+
+// ... wait for changes ...
+
+let changes = detector.detect_changes(&proc, &regions)?;
 ```
 
 ## Usage
