@@ -30,6 +30,7 @@ use winapi::{
 
 // ================== Windows-specific process types ==================
 
+#[derive(Debug)]
 pub struct ProcessHandleWin(pub HANDLE);
 
 unsafe impl Send for ProcessHandleWin {}

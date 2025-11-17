@@ -24,7 +24,7 @@ impl MappedMemoryUnix {
     /// On Linux, this reads the remote memory into a local buffer.
     /// For true instant change detection, Linux would require using
     /// `process_vm_readv` repeatedly or custom kernel modules.
-    pub fn new(proc: &ProcessHandle, region: &MemoryRegion) -> Result<Self> {
+    pub fn map_region(proc: &ProcessHandle, region: &MemoryRegion) -> Result<Self> {
         // Allocate a buffer for the remote memory
         let mut buffer = vec![0u8; region.size];
 

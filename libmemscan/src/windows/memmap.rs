@@ -14,6 +14,7 @@ use winapi::{
 };
 
 /// Windows-specific mapped memory implementation
+#[derive(Debug)]
 pub struct MappedMemoryWin {
     /// Handle to the file mapping object
     mapping_handle: HANDLE,
@@ -28,7 +29,7 @@ impl MappedMemoryWin {
     ///
     /// This uses Windows file mapping APIs to create a section object
     /// backed by the remote process's memory.
-    pub fn new(proc: &ProcessHandle, region: &MemoryRegion) -> Result<Self> {
+    pub fn map_region(proc: &ProcessHandle, region: &MemoryRegion) -> Result<Self> {
         unsafe {
             // Create a file mapping object backed by the remote process memory
             // Using INVALID_HANDLE_VALUE with SEC_COMMIT creates a page-file backed mapping
