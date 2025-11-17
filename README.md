@@ -9,57 +9,11 @@ The functionality is implemented using only user-mode APIs. However, elevated pr
 - [X] Cross-platform support
 - [X] **Memory mapping for instant change detection**
 - [X] **Parallel diffing of watched memory regions**
-- [ ] Support for scanning large memory regions efficiently
+- [X] Support for scanning large memory regions efficiently
 - [ ] Configurable scanning options (e.g., case sensitivity, wildcards)
 - [ ] Python bindings for scriptable (automated) scans
 - [ ] Identify dynamic memory regions (e.g., images, stack, all heaps, allocated virtual pages)
 - [X] Filter memory regions based on module ownership
-
-## Performance Benchmarking
-
-MemScan includes comprehensive benchmarking infrastructure using `Criterion.rs`. For detailed information, see [BENCHMARKING.md](BENCHMARKING.md).
-
-Quick start:
-
-```sh
-cargo bench                           # Run all benchmarks
-cargo bench --bench pattern_search   # Run specific benchmark
-cargo bench --bench memory_mapping   # Benchmark memory mapping
-./bench.sh report                     # Open HTML report (Unix)
-.\bench.ps1 report                    # Open HTML report (Windows)
-```
-
-## Memory Mapping
-
-MemScan now uses **memory mapping by default** for efficient scanning, replacing the slower `ReadProcessMemory` approach. This provides:
-- Faster memory access through direct mapping (Windows) or buffered reads (Linux)
-- Automatic fallback to `ReadProcessMemory` if mapping fails
-- Optional disable via `--no-memmap` flag
-
-**CLI Usage:**
-```sh
-# Use memory mapping (default, faster)
-memscan scan notepad --pattern "4D 5A 90 00"
-
-# Disable memory mapping (use ReadProcessMemory)
-memscan scan notepad --pattern "4D 5A 90 00" --no-memmap
-```
-
-**Programmatic change detection:**
-```rust
-use libmemscan::process::open_process;
-use libmemscan::diff::ChangeDetector;
-
-let proc = open_process(pid)?;
-let mut detector = ChangeDetector::new();
-detector.initialize(&proc, &regions)?;
-
-// ... wait for changes ...
-
-let changes = detector.detect_changes(&proc, &regions)?;
-```
-
-For detailed information, see [MEMORY_MAPPING.md](MEMORY_MAPPING.md).
 
 ## Usage
 
@@ -122,6 +76,38 @@ $ memscan scan notepad --pattern "4D 5A 90 00" -vv
 ```
 
 </details>
+
+## `libmemscan` crate
+
+**Programmatic change detection:**
+```rust
+use libmemscan::process::open_process;
+use libmemscan::diff::ChangeDetector;
+
+let proc = open_process(pid)?;
+let mut detector = ChangeDetector::new();
+detector.initialize(&proc, &regions)?;
+
+// ... wait for changes ...
+
+let changes = detector.detect_changes(&proc, &regions)?;
+```
+
+For detailed information, see [MEMORY_MAPPING.md](llm/MEMORY_MAPPING.md).
+
+## Performance Benchmarking
+
+MemScan includes comprehensive benchmarking infrastructure using `Criterion.rs`. For detailed information, see [BENCHMARKING.md](BENCHMARKING.md).
+
+Quick start:
+
+```sh
+cargo bench                           # Run all benchmarks
+cargo bench --bench pattern_search   # Run specific benchmark
+cargo bench --bench memory_mapping   # Benchmark memory mapping
+./bench.sh report                     # Open HTML report (Unix)
+.\bench.ps1 report                    # Open HTML report (Windows)
+```
 
 ## References
 
