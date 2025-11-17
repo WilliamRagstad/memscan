@@ -31,15 +31,21 @@ cargo bench --bench memory_mapping   # Benchmark memory mapping
 
 ## Memory Mapping
 
-MemScan supports memory mapping for efficient change detection. This allows you to:
-- Map remote process memory pages into the local process
-- Detect memory changes by comparing snapshots
-- Parallelize diffing across multiple watched regions
+MemScan now uses **memory mapping by default** for efficient scanning, replacing the slower `ReadProcessMemory` approach. This provides:
+- Faster memory access through direct mapping (Windows) or buffered reads (Linux)
+- Automatic fallback to `ReadProcessMemory` if mapping fails
+- Optional disable via `--no-memmap` flag
 
-For detailed information, see [MEMORY_MAPPING.md](MEMORY_MAPPING.md).
+**CLI Usage:**
+```sh
+# Use memory mapping (default, faster)
+memscan scan notepad --pattern "4D 5A 90 00"
 
-Quick example:
+# Disable memory mapping (use ReadProcessMemory)
+memscan scan notepad --pattern "4D 5A 90 00" --no-memmap
+```
 
+**Programmatic change detection:**
 ```rust
 use libmemscan::process::open_process;
 use libmemscan::diff::ChangeDetector;
@@ -52,6 +58,8 @@ detector.initialize(&proc, &regions)?;
 
 let changes = detector.detect_changes(&proc, &regions)?;
 ```
+
+For detailed information, see [MEMORY_MAPPING.md](MEMORY_MAPPING.md).
 
 ## Usage
 

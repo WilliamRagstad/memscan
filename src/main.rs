@@ -45,6 +45,11 @@ pub enum Command {
         /// (by default, only the process's own modules are scanned)
         #[arg(long)]
         all_modules: bool,
+
+        /// Disable memory mapping and use ReadProcessMemory instead
+        /// (memory mapping is enabled by default for better performance)
+        #[arg(long)]
+        no_memmap: bool,
     },
 }
 
@@ -55,6 +60,7 @@ fn main() -> anyhow::Result<()> {
             target,
             pattern,
             all_modules,
+            no_memmap,
         } => {
             let pid = if target.chars().all(|c| c.is_ascii_digit()) {
                 let pid: u32 = target.parse()?;
@@ -96,6 +102,7 @@ fn main() -> anyhow::Result<()> {
                 pattern: pattern_bytes.as_deref(),
                 verbose: cli.verbose,
                 all_modules,
+                use_memmap: !no_memmap, // Enable memory mapping by default
             };
 
             scan_process(&proc, &sys, &opts, &modules)?;

@@ -126,6 +126,20 @@ pub struct MemoryChange {
 
 ## Usage Examples
 
+### Integrated Scanner Usage
+
+The memory mapping functionality is now integrated into the default scanner. By default, the scanner uses memory mapping for better performance:
+
+```bash
+# Use memory mapping (default)
+memscan scan notepad --pattern "4D 5A 90 00"
+
+# Disable memory mapping and use ReadProcessMemory
+memscan scan notepad --pattern "4D 5A 90 00" --no-memmap
+```
+
+The scanner automatically falls back to `ReadProcessMemory` if memory mapping fails for a particular region.
+
 ### Basic Memory Mapping
 
 ```rust

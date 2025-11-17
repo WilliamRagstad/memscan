@@ -1,5 +1,6 @@
 //! No direct Windows or Linux API usage here; platform-specific reads are in OS modules
 
+use crate::memmap::MappedMemory;
 use crate::process::ProcessHandle;
 use crate::process::{MemoryRegion, MemoryRegionIterator, SystemInfo};
 use anyhow::Result;
@@ -12,6 +13,7 @@ use crate::linux;
 use crate::windows;
 
 // Small cross-platform wrapper that dispatches to OS-specific process memory readers.
+// This is kept for backward compatibility and fallback cases.
 fn os_read_process_memory(proc: &ProcessHandle, addr: usize, buf: &mut [u8]) -> usize {
     #[cfg(windows)]
     return windows::process::read_process_memory(proc, addr, buf);
@@ -22,6 +24,8 @@ pub struct ScanOptions<'a> {
     pub pattern: Option<&'a [u8]>,
     pub verbose: u8,
     pub all_modules: bool,
+    /// Use memory mapping instead of ReadProcessMemory (default: true)
+    pub use_memmap: bool,
 }
 
 /// Perform static, single-pass scan all readable regions.
@@ -102,6 +106,71 @@ pub fn scan_process(
             );
         }
 
+        // Try to use memory mapping if enabled, fall back to ReadProcessMemory on error
+        if opts.use_memmap {
+            match MappedMemory::new(proc, &region) {
+                Ok(mapped) => {
+                    // Successfully mapped, use the mapped memory
+                    let memory_slice = mapped.as_slice();
+                    total_bytes += memory_slice.len();
+
+                    if let Some(pattern) = opts.pattern {
+                        let mut prev_off = 0;
+                        while prev_off < memory_slice.len() {
+                            if let Some(rel_off) = naive_search(&memory_slice[prev_off..], pattern) {
+                                let abs_addr = region.base_address + prev_off + rel_off;
+                                matches_found += 1;
+                                println!("{}  {:016x}", "[match]".bright_green(), abs_addr);
+                                if opts.verbose > 0 {
+                                    // Display surrounding bytes and highlight match
+                                    const CONTEXT_BYTES: usize = 8;
+                                    let match_offset = prev_off + rel_off;
+                                    let start = match_offset.saturating_sub(CONTEXT_BYTES);
+                                    let end = min(match_offset + pattern.len() + CONTEXT_BYTES, memory_slice.len());
+                                    print!("{}", " ... ".bright_black());
+                                    let mut i = start;
+                                    while i < end {
+                                        if i == match_offset {
+                                            // Highlight match
+                                            for b in &memory_slice[i..i + pattern.len()] {
+                                                print!(
+                                                    "{}",
+                                                    format!("{:02x} ", b).bright_green().bold()
+                                                );
+                                            }
+                                            i += pattern.len();
+                                        } else {
+                                            print!(
+                                                "{}",
+                                                format!("{:02x} ", memory_slice[i]).bright_black()
+                                            );
+                                            i += 1;
+                                        }
+                                    }
+                                    println!("{}", " ... ".bright_black());
+                                }
+                                prev_off += rel_off + 1; // continue searching after this match
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    continue; // Skip to next region
+                }
+                Err(_) => {
+                    // Fall back to page-by-page reading
+                    if opts.verbose > 2 {
+                        println!(
+                            "{} memory mapping failed for region {:016x}, falling back to ReadProcessMemory",
+                            "[warn]".yellow(),
+                            region.base_address
+                        );
+                    }
+                }
+            }
+        }
+
+        // Original page-by-page reading (fallback or when use_memmap is false)
         let mut offset = 0usize;
         while offset < region.size {
             let to_read = min(page_size, region.size - offset);
