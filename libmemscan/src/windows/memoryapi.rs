@@ -1,8 +1,7 @@
 //! Required functions not included in the winapi crate
 //! See: https://github.com/retep998/winapi-rs/blob/5b1829956ef645f3c2f8236ba18bb198ca4c2468/src/um/memoryapi.rs#L344-L383
 
-#![cfg(windows)]
-#![allow(non_snake_case, dead_code)]
+#![allow(non_snake_case)]
 use winapi::{
     shared::{
         basetsd::{PSIZE_T, SIZE_T, ULONG64},
@@ -16,7 +15,12 @@ use winapi::{
 };
 
 unsafe extern "system" {
-    pub unsafe fn QueryVirtualMemoryInformation(
+    /// Information about a page or a set of pages within the virtual address space of the specified process.
+    ///
+    /// ## Returns
+    /// Returns `TRUE` on success. Returns `FALSE` for failure. To get extended error information, call `GetLastError`.
+    /// Out value is stored in `MemoryInformation`.
+    pub unsafe fn _QueryVirtualMemoryInformation(
         Process: HANDLE,
         VirtualAddress: *const VOID,
         MemoryInformationClass: WIN32_MEMORY_INFORMATION_CLASS,
@@ -36,6 +40,17 @@ unsafe extern "system" {
     ) -> PVOID;
 }
 
+/// Maps a view of a file or a pagefile-backed section into the address space of the specified process.
+///
+/// ## Returns
+/// Returns the base address of the mapped view, if successful. Otherwise, returns `NULL` and extended error status is available using `GetLastError`.
+///
+/// ## Remarks
+/// This function is implemented as an inline function in the header and can't be found in any export library or DLL.
+/// It's the same as calling `MapViewOfFileNuma2` with the last parameter set to `NUMA_NO_PREFERRED_NODE`.
+///
+/// ## Reference
+/// See [MapViewOfFile2 function](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile2) (`memoryapi.h`)
 #[inline]
 pub unsafe fn MapViewOfFile2(
     FileMappingHandle: HANDLE,

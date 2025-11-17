@@ -1,4 +1,3 @@
-#![cfg(windows)]
 use crate::process::{
     MemoryProtection, MemoryRegion, MemoryState, MemoryType, ProcessHandle, SystemInfo,
     is_region_interesting,
@@ -23,14 +22,15 @@ use winapi::{
         winnt::{
             CHAR, HANDLE, MEM_COMMIT, MEM_FREE, MEM_IMAGE, MEM_MAPPED, MEM_PRIVATE, MEM_RESERVE,
             MEMORY_BASIC_INFORMATION, PAGE_EXECUTE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE,
-            PAGE_EXECUTE_WRITECOPY, PAGE_GUARD, PAGE_NOACCESS, PAGE_READONLY, PAGE_READWRITE,
-            PAGE_WRITECOPY, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+            PAGE_EXECUTE_WRITECOPY, PAGE_GUARD, PAGE_NOACCESS, PAGE_NOCACHE, PAGE_READONLY,
+            PAGE_READWRITE, PAGE_WRITECOPY, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
         },
     },
 };
 
 // ================== Windows-specific process types ==================
 
+#[derive(Debug)]
 pub struct ProcessHandleWin(pub HANDLE);
 
 unsafe impl Send for ProcessHandleWin {}
@@ -83,7 +83,7 @@ impl From<u32> for MemoryProtection {
                 != 0,
             copy_on_write: protect & (PAGE_WRITECOPY | PAGE_EXECUTE_WRITECOPY) != 0,
             guarded: protect & PAGE_GUARD != 0,
-            no_cache: false, // Windows does not have a direct equivalent for NOCACHE in this context
+            no_cache: protect & PAGE_NOCACHE != 0,
         }
     }
 }

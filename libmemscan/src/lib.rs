@@ -8,6 +8,8 @@ pub(crate) mod linux;
 pub(crate) mod windows;
 
 // Platform-independent modules
+pub mod diff;
+pub mod memmap;
 pub mod process;
 pub mod scanner;
 

@@ -1,26 +1,13 @@
 //! No direct Windows or Linux API usage here; platform-specific reads are in OS modules
 
+use crate::memmap::{MappedMemory, MemoryMapper};
 use crate::process::ProcessHandle;
 use crate::process::{MemoryRegion, MemoryRegionIterator, SystemInfo};
 use anyhow::Result;
-use owo_colors::OwoColorize;
-use std::cmp::min;
 use memchr::memmem;
+use owo_colors::OwoColorize;
 
-#[cfg(unix)]
-use crate::linux;
-#[cfg(windows)]
-use crate::windows;
-
-// Small cross-platform wrapper that dispatches to OS-specific process memory readers.
-fn os_read_process_memory(proc: &ProcessHandle, addr: usize, buf: &mut [u8]) -> usize {
-    #[cfg(windows)]
-    return windows::process::read_process_memory(proc, addr, buf);
-    #[cfg(unix)]
-    return linux::process::read_process_memory(proc, addr, buf);
-}
-pub struct ScanOptions<'a> {
-    pub pattern: Option<&'a [u8]>,
+pub struct ScanOptions {
     pub verbose: u8,
     pub all_modules: bool,
 }
@@ -29,16 +16,16 @@ pub struct ScanOptions<'a> {
 pub fn scan_process(
     proc: &ProcessHandle,
     sys: &SystemInfo,
-    opts: &ScanOptions<'_>,
+    pattern: &[u8],
+    opts: &ScanOptions,
     modules: &[MemoryRegion],
 ) -> Result<()> {
-    let page_size = sys.page_size;
-    let mut page_buf = vec![0u8; page_size];
-
+    let mut memory_mapper = MemoryMapper::new(proc);
     let mut total_regions = 0usize;
     let mut total_bytes = 0usize;
     let mut matches_found = 0usize;
 
+    // First map all regions
     for region in MemoryRegionIterator::new(proc, sys) {
         let current_module = modules.iter().find(|ign| ign.is_superset_of(&region));
         let current_module_file = current_module.and_then(|ign| ign.image_file.as_deref());
@@ -79,8 +66,6 @@ pub fn scan_process(
             }
         }
 
-        total_regions += 1;
-
         if opts.verbose > 1 {
             println!(
                 "{} {:016x} - {:016x} ({} KiB) \t[{}, {}, {}, {}]",
@@ -103,70 +88,33 @@ pub fn scan_process(
             );
         }
 
-        let mut offset = 0usize;
-        while offset < region.size {
-            let to_read = min(page_size, region.size - offset);
-            let read_n = os_read_process_memory(
-                proc,
-                region.base_address + offset,
-                &mut page_buf[..to_read],
-            );
-            let ok = read_n > 0;
-
-            if ok {
-                total_bytes += to_read;
-
-                if let Some(pattern) = opts.pattern {
-                    let mut prev_off = 0;
-                    while prev_off < to_read {
-                        if let Some(rel_off) = optimized_search(&page_buf[prev_off..to_read], pattern) {
-                            let page_offset = prev_off + rel_off;
-                            let abs_addr = region.base_address + offset + page_offset;
-                            matches_found += 1;
-                            println!("{}  {:016x}", "[match]".bright_green(), abs_addr);
-                            if opts.verbose > 0 {
-                                // Display surrounding bytes and highlight match
-                                const CONTEXT_BYTES: usize = 8;
-                                let start = page_offset.saturating_sub(CONTEXT_BYTES);
-                                let end = min(page_offset + pattern.len() + CONTEXT_BYTES, to_read);
-                                print!("{}", " ... ".bright_black());
-                                let mut i = start;
-                                while i < end {
-                                    if i == page_offset {
-                                        // Highlight match
-                                        for b in &page_buf[i..i + pattern.len()] {
-                                            print!(
-                                                "{}",
-                                                format!("{:02x} ", b).bright_green().bold()
-                                            );
-                                        }
-                                        i += pattern.len();
-                                    } else {
-                                        print!(
-                                            "{}",
-                                            format!("{:02x} ", page_buf[i]).bright_black()
-                                        );
-                                        i += 1;
-                                    }
-                                }
-                                println!("{}", " ... ".bright_black());
-                            }
-                            prev_off += rel_off + 1; // continue searching after this match
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            } else if opts.verbose > 1 {
+        total_regions += 1;
+        total_bytes += region.size;
+        let region_base_addr = region.base_address;
+        if let Err(err) = memory_mapper.map_region(region) {
+            if opts.verbose > 0 {
                 println!(
-                    "{} failed to read page at {:016x}",
+                    "{} memory mapping failed for region {:016x}: {}",
                     "[warn]".yellow(),
-                    region.base_address + offset
+                    region_base_addr,
+                    err
                 );
             }
-
-            offset += to_read;
         }
+    }
+
+    println!(
+        "{} mapped {} regions, ~{} KiB",
+        "[info]".bright_cyan(),
+        total_regions,
+        total_bytes / 1024,
+    );
+
+    // Now scan all mapped regions
+    for mapped in memory_mapper.into_iter() {
+        total_bytes += mapped.remote_region.size;
+        let matches = scan_region(&mapped, pattern, opts)?;
+        matches_found += matches;
     }
 
     println!(
@@ -178,6 +126,60 @@ pub fn scan_process(
     );
 
     Ok(())
+}
+
+pub fn scan_region(mapped: &MappedMemory, pattern: &[u8], opts: &ScanOptions) -> Result<usize> {
+    let mut matches_found = 0usize;
+    let mut prev_off = 0;
+    let haystack = mapped.data();
+    while prev_off < haystack.len() {
+        if let Some(rel_off) = optimized_search(&haystack[prev_off..], pattern) {
+            let match_address = mapped.remote_region.base_address + prev_off + rel_off;
+            print_match_context(match_address, haystack, pattern, prev_off, rel_off, opts);
+            matches_found += 1;
+
+            prev_off += rel_off + 1; // continue searching after this match
+        } else {
+            break;
+        }
+    }
+    Ok(matches_found)
+}
+
+fn print_match_context(
+    abs_addr: usize,
+    memory_slice: &[u8],
+    pattern: &[u8],
+    prev_off: usize,
+    rel_off: usize,
+    opts: &ScanOptions,
+) {
+    println!("{}  {:016x}", "[match]".bright_green(), abs_addr);
+    if opts.verbose > 0 {
+        // Display surrounding bytes and highlight match
+        const CONTEXT_BYTES: usize = 8;
+        let match_offset = prev_off + rel_off;
+        let start = match_offset.saturating_sub(CONTEXT_BYTES);
+        let end = std::cmp::min(
+            match_offset + pattern.len() + CONTEXT_BYTES,
+            memory_slice.len(),
+        );
+        print!("{}", " ... ".bright_black());
+        let mut i = start;
+        while i < end {
+            if i == match_offset {
+                // Highlight match
+                for b in &memory_slice[i..i + pattern.len()] {
+                    print!("{}", format!("{:02x} ", b).bright_green().bold());
+                }
+                i += pattern.len();
+            } else {
+                print!("{}", format!("{:02x} ", memory_slice[i]).bright_black());
+                i += 1;
+            }
+        }
+        println!("{}", " ... ".bright_black());
+    }
 }
 
 /// Very simple O(n*m) pattern matcher sufficient for now.
@@ -194,7 +196,7 @@ pub fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     None
 }
 
-/// Optimized pattern search using the memchr crate.
+/// Optimized pattern search using the `memchr` crate.
 /// This uses SIMD instructions for significantly better performance.
 pub fn optimized_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() {

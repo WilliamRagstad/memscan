@@ -90,15 +90,16 @@ fn main() -> anyhow::Result<()> {
                 modules.len()
             );
 
-            let pattern_bytes = pattern.as_ref().map(|s| parse_hex_pattern(s)).transpose()?;
+            let Some(pattern) = pattern.as_ref().map(|s| parse_hex_pattern(s)).transpose()? else {
+                anyhow::bail!("a hex pattern must be specified for scanning");
+            };
 
             let opts = ScanOptions {
-                pattern: pattern_bytes.as_deref(),
                 verbose: cli.verbose,
                 all_modules,
             };
 
-            scan_process(&proc, &sys, &opts, &modules)?;
+            scan_process(&proc, &sys, &pattern, &opts, &modules)?;
         }
     }
     Ok(())
