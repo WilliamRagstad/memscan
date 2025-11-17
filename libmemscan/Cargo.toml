@@ -10,6 +10,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.100"
 owo-colors = "4.2.3"
+memchr = "2.7"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
