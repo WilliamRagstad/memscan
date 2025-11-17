@@ -4,18 +4,23 @@ use crate::process::{
     is_region_interesting,
 };
 use anyhow::Result;
-use std::collections::HashMap;
-use std::fs::{File, read_link};
-use std::io::{BufRead, BufReader};
-use std::os::fd::{AsRawFd, RawFd};
-use std::os::unix::fs::FileExt;
-use std::path::Path;
+use libc::{_SC_PAGESIZE, pid_t, sysconf};
+use std::{
+    collections::HashMap,
+    fs::{File, read_link},
+    io::{BufRead, BufReader},
+    os::{
+        fd::{AsRawFd, RawFd},
+        unix::fs::FileExt,
+    },
+    path::Path,
+};
 
-// ================== Linux/Unix-specific process types ==================
+// ================== Linux/UNIX-specific process types ==================
 
 #[derive(Debug)]
 pub struct ProcessHandleUnix {
-    pid: libc::pid_t,
+    pid: pid_t,
     mem: File,
     maps: Vec<MemoryRegion>,
     page_size: usize,
@@ -26,7 +31,7 @@ unsafe impl Send for ProcessHandleUnix {}
 unsafe impl Sync for ProcessHandleUnix {}
 
 impl ProcessHandleUnix {
-    pub fn raw(&self) -> libc::pid_t {
+    pub fn raw(&self) -> pid_t {
         self.pid
     }
 
@@ -39,9 +44,9 @@ impl ProcessHandleUnix {
     }
 }
 
-// ================== Linux/Unix-specific helpers ==================
+// ================== Linux/UNIX-specific helpers ==================
 
-fn parse_proc_maps(pid: libc::pid_t) -> Result<(Vec<MemoryRegion>, Option<String>)> {
+fn parse_proc_maps(pid: pid_t) -> Result<(Vec<MemoryRegion>, Option<String>)> {
     // NOTE: This function now returns Vec<MemoryRegion> instead of a custom MapEntry
     // to align with the user's request to use the cross-platform struct directly.
     let maps_path = format!("/proc/{pid}/maps");
@@ -57,13 +62,13 @@ fn parse_proc_maps(pid: libc::pid_t) -> Result<(Vec<MemoryRegion>, Option<String
     for line_res in reader.lines() {
         let line = line_res?;
         // Format:
-        // start-end perms offset dev:inode pathname
+        // start-end perms offset `dev:inode` pathname
         // Example:
-        // 00400000-0040b000 r-xp 00000000 08:01 131104 /usr/bin/cat
+        // `00400000-0040b000 r-xp 00000000 08:01 131104 /usr/bin/cat`
         let mut parts = line.splitn(6, ' ').filter(|s| !s.is_empty());
         let addr = parts.next().unwrap_or("");
         let perms = parts.next().unwrap_or("");
-        // offset, dev, inode are currently unused in MemoryRegion abstraction
+        // `offset`, `dev`, `inode` are currently unused in MemoryRegion abstraction
         let _offset_hex = parts.next().unwrap_or("0");
         let _dev = parts.next().unwrap_or("");
         let _inode = parts.next().unwrap_or("0");
@@ -121,7 +126,7 @@ fn perms_to_protection(perms: &str) -> MemoryProtection {
     let exec = bytes.get(2).map(|&c| c == b'x').unwrap_or(false);
     // Linux doesn't expose guarded or no_cache in maps; assume false
     MemoryProtection {
-        no_access: false, // not an exact match; leave false so we attempt reads and handle failures
+        no_access: false, // Not an exact match; leave false so we attempt reads and handle failures
         read,
         write,
         execute: exec,
@@ -149,14 +154,14 @@ fn perms_to_type(perms: &str, pathname: &Option<String>, _exe_path: &Option<Stri
 // ================== Linux-specific process functions ==================
 
 pub(crate) fn open_process(pid: u32) -> Result<ProcessHandle> {
-    let pid_i = pid as libc::pid_t;
+    let pid_i = pid as pid_t;
     // Open /proc/<pid>/mem for reading
     let mem_path = format!("/proc/{pid}/mem");
     let mem =
         File::open(&mem_path).map_err(|e| anyhow::anyhow!("failed to open {}: {}", mem_path, e))?;
 
     let (maps, exe_path) = parse_proc_maps(pid_i)?;
-    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
+    let page_size = unsafe { sysconf(_SC_PAGESIZE) as usize };
 
     Ok(ProcessHandleUnix {
         pid: pid_i,
@@ -168,7 +173,7 @@ pub(crate) fn open_process(pid: u32) -> Result<ProcessHandle> {
 }
 
 /// Find the PID of the first process whose executable name matches `name` (case-insensitive).
-/// On Linux, we'll try /proc/<pid>/comm first; if that doesn't match, fall back to basename of /proc/<pid>/exe.
+/// On Linux, we'll try `/proc/<pid>/comm` first; if that doesn't match, fall back to base name of `/proc/<pid>/exe`.
 pub(crate) fn find_process_by_name(name: &str) -> Result<Option<u32>> {
     use std::fs;
 
@@ -188,7 +193,7 @@ pub(crate) fn find_process_by_name(name: &str) -> Result<Option<u32>> {
             Err(_) => continue,
         };
 
-        // Try /proc/<pid>/comm
+        // Try `/proc/<pid>/comm`
         let comm_path = entry.path().join("comm");
         if let Ok(comm) = fs::read_to_string(&comm_path) {
             let comm_trim = comm.trim().to_ascii_lowercase();
@@ -196,7 +201,7 @@ pub(crate) fn find_process_by_name(name: &str) -> Result<Option<u32>> {
                 return Ok(Some(pid));
             }
         }
-        // Fallback: basename of /proc/<pid>/exe
+        // Fallback: base name of `/proc/<pid>/exe`
         if let Ok(link) = read_link(entry.path().join("exe")) {
             if let Some(base) = link.file_name().and_then(|s| s.to_str()) {
                 let base_lc = base.to_ascii_lowercase();
@@ -213,7 +218,7 @@ pub(crate) fn find_process_by_name(name: &str) -> Result<Option<u32>> {
 /// Get a list of module regions (rough approximation) by grouping file-backed mappings by pathname,
 /// skipping the main executable image.
 pub(crate) fn get_process_module_regions(proc: &ProcessHandleUnix) -> Result<Vec<MemoryRegion>> {
-    let mut by_path: HashMap<String, (usize, usize, bool)> = HashMap::new(); // path -> (min_start, max_end, any_exec)
+    let mut by_path: HashMap<String, (usize, usize, bool)> = HashMap::new(); // path -> (`min_start`, `max_end`, `any_exec`)
 
     for m in &proc.maps {
         let Some(path) = &m.image_file else { continue };
@@ -264,10 +269,10 @@ pub(crate) fn get_process_module_regions(proc: &ProcessHandleUnix) -> Result<Vec
 }
 
 pub(crate) fn query_system_info() -> SystemInfo {
-    let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
+    let page_size = unsafe { sysconf(_SC_PAGESIZE) as usize };
 
-    // Derive min/max from current process maps (kernel enforces valid addresses anyway)
-    // If maps unavailable, fall back to broad 0..=usize::MAX range (will quickly terminate as iterator finds none)
+    // Derive `min`/`max` from current process maps (kernel enforces valid addresses anyway)
+    // If maps unavailable, fallback `0..=usize::MAX` range (will quickly terminate as iterator finds none)
     let (min_addr, max_addr) = (0usize, usize::MAX);
 
     SystemInfo {

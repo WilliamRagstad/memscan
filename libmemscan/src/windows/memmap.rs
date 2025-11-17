@@ -1,16 +1,14 @@
 //! Windows-specific memory mapping implementation using file mapping objects
 
-#![cfg(windows)]
-
 use crate::process::{MemoryRegion, ProcessHandle};
 use crate::windows::memoryapi::MapViewOfFile2;
 use anyhow::Result;
 use std::ptr::{null, null_mut};
 use winapi::{
-    shared::minwindef::{FALSE, LPVOID},
+    shared::minwindef::LPVOID,
     um::{
         handleapi::CloseHandle,
-        memoryapi::{CreateFileMappingW, UnmapViewOfFile, FILE_MAP_READ},
+        memoryapi::{CreateFileMappingW, UnmapViewOfFile},
         winnt::{HANDLE, PAGE_READONLY, SEC_COMMIT},
     },
 };
@@ -19,9 +17,9 @@ use winapi::{
 pub struct MappedMemoryWin {
     /// Handle to the file mapping object
     mapping_handle: HANDLE,
-    /// Pointer to the mapped view in local process
+    /// Pointer to mapped view in local process
     local_ptr: LPVOID,
-    /// Size of the mapped region
+    /// Size of mapped region
     size: usize,
 }
 
@@ -79,7 +77,7 @@ impl MappedMemoryWin {
         }
     }
 
-    /// Get a slice view of the mapped memory
+    /// Get a slice view of mapped memory
     pub fn as_slice(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.local_ptr as *const u8, self.size) }
     }

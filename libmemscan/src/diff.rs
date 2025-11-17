@@ -20,7 +20,7 @@ impl MemorySnapshot {
     pub fn from_mapped(mapped: &MappedMemory) -> Self {
         Self {
             address: mapped.remote_address(),
-            data: mapped.as_slice().to_vec(),
+            data: mapped.data().to_vec(),
         }
     }
 
@@ -87,9 +87,17 @@ impl ChangeDetector {
     /// Detect changes by comparing current memory state with snapshots
     ///
     /// This performs parallel comparison of all tracked regions
-    pub fn detect_changes(&self, proc: &ProcessHandle, regions: &[MemoryRegion]) -> Result<Vec<Vec<MemoryChange>>> {
+    pub fn detect_changes(
+        &self,
+        proc: &ProcessHandle,
+        regions: &[MemoryRegion],
+    ) -> Result<Vec<Vec<MemoryChange>>> {
         if regions.len() != self.snapshots.len() {
-            anyhow::bail!("Region count mismatch: expected {}, got {}", self.snapshots.len(), regions.len());
+            anyhow::bail!(
+                "Region count mismatch: expected {}, got {}",
+                self.snapshots.len(),
+                regions.len()
+            );
         }
 
         // For now, implement sequential comparison
@@ -105,7 +113,11 @@ impl ChangeDetector {
     }
 
     /// Update snapshots to the current memory state
-    pub fn update_snapshots(&mut self, proc: &ProcessHandle, regions: &[MemoryRegion]) -> Result<()> {
+    pub fn update_snapshots(
+        &mut self,
+        proc: &ProcessHandle,
+        regions: &[MemoryRegion],
+    ) -> Result<()> {
         if regions.len() != self.snapshots.len() {
             anyhow::bail!("Region count mismatch");
         }

@@ -1,13 +1,12 @@
-//! Linux-specific memory mapping implementation using /proc/pid/mem
+//! Linux-specific memory mapping implementation using `/proc/pid/mem`
 
 #![cfg(unix)]
-
 use crate::process::{MemoryRegion, ProcessHandle};
 use anyhow::Result;
 
 /// Linux-specific mapped memory implementation
 ///
-/// On Linux, we use process_vm_readv or direct memory mapping through /proc/pid/mem.
+/// On Linux, we use `process_vm_readv` or direct memory mapping through `/proc/pid/mem`.
 /// Since true shared memory mapping of another process's address space is complex
 /// and requires specific kernel features, we implement a cached read approach that
 /// reads memory into a local buffer.
@@ -24,15 +23,21 @@ impl MappedMemoryUnix {
     ///
     /// On Linux, this reads the remote memory into a local buffer.
     /// For true instant change detection, Linux would require using
-    /// process_vm_readv repeatedly or custom kernel modules.
+    /// `process_vm_readv` repeatedly or custom kernel modules.
     pub fn new(proc: &ProcessHandle, region: &MemoryRegion) -> Result<Self> {
         // Allocate a buffer for the remote memory
         let mut buffer = vec![0u8; region.size];
 
-        // Read the memory from /proc/pid/mem
+        // Read the memory from `/proc/pid/mem`
         let bytes_read = proc
             .read_mem(region.base_address, &mut buffer)
-            .map_err(|e| anyhow::anyhow!("Failed to read memory at {:016x}: {}", region.base_address, e))?;
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to read memory at {:016x}: {}",
+                    region.base_address,
+                    e
+                )
+            })?;
 
         if bytes_read < region.size {
             anyhow::bail!(
@@ -49,17 +54,23 @@ impl MappedMemoryUnix {
         })
     }
 
-    /// Get a slice view of the mapped memory
+    /// Get a slice view of mapped memory
     pub fn as_slice(&self) -> &[u8] {
         &self.buffer
     }
 
-    /// Refresh the mapped memory by re-reading from the remote process
+    /// Refresh mapped memory by re-reading from the remote process
     #[allow(dead_code)]
     pub fn refresh(&mut self, proc: &ProcessHandle) -> Result<()> {
         let bytes_read = proc
             .read_mem(self.remote_addr, &mut self.buffer)
-            .map_err(|e| anyhow::anyhow!("Failed to refresh memory at {:016x}: {}", self.remote_addr, e))?;
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to refresh memory at {:016x}: {}",
+                    self.remote_addr,
+                    e
+                )
+            })?;
 
         if bytes_read < self.buffer.len() {
             anyhow::bail!(

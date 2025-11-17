@@ -1,4 +1,5 @@
 // Windows-specific modules
-pub mod memoryapi;
+#![cfg(windows)]
 pub mod memmap;
+pub mod memoryapi;
 pub mod process;

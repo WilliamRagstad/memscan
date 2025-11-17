@@ -2,7 +2,7 @@
 
 use crate::memmap::MappedMemory;
 use crate::process::ProcessHandle;
-use crate::process::{MemoryRegion, MemoryRegionIterator, SystemInfo};
+use crate::process::{MemoryRegion, MemoryRegionIterator, SystemInfo, read_process_memory};
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use std::cmp::min;
@@ -12,14 +12,6 @@ use crate::linux;
 #[cfg(windows)]
 use crate::windows;
 
-// Small cross-platform wrapper that dispatches to OS-specific process memory readers.
-// This is kept for backward compatibility and fallback cases.
-fn os_read_process_memory(proc: &ProcessHandle, addr: usize, buf: &mut [u8]) -> usize {
-    #[cfg(windows)]
-    return windows::process::read_process_memory(proc, addr, buf);
-    #[cfg(unix)]
-    return linux::process::read_process_memory(proc, addr, buf);
-}
 pub struct ScanOptions<'a> {
     pub pattern: Option<&'a [u8]>,
     pub verbose: u8,
@@ -111,13 +103,14 @@ pub fn scan_process(
             match MappedMemory::new(proc, &region) {
                 Ok(mapped) => {
                     // Successfully mapped, use the mapped memory
-                    let memory_slice = mapped.as_slice();
+                    let memory_slice = mapped.data();
                     total_bytes += memory_slice.len();
 
                     if let Some(pattern) = opts.pattern {
                         let mut prev_off = 0;
                         while prev_off < memory_slice.len() {
-                            if let Some(rel_off) = naive_search(&memory_slice[prev_off..], pattern) {
+                            if let Some(rel_off) = naive_search(&memory_slice[prev_off..], pattern)
+                            {
                                 let abs_addr = region.base_address + prev_off + rel_off;
                                 matches_found += 1;
                                 println!("{}  {:016x}", "[match]".bright_green(), abs_addr);
@@ -126,7 +119,10 @@ pub fn scan_process(
                                     const CONTEXT_BYTES: usize = 8;
                                     let match_offset = prev_off + rel_off;
                                     let start = match_offset.saturating_sub(CONTEXT_BYTES);
-                                    let end = min(match_offset + pattern.len() + CONTEXT_BYTES, memory_slice.len());
+                                    let end = min(
+                                        match_offset + pattern.len() + CONTEXT_BYTES,
+                                        memory_slice.len(),
+                                    );
                                     print!("{}", " ... ".bright_black());
                                     let mut i = start;
                                     while i < end {
@@ -174,11 +170,8 @@ pub fn scan_process(
         let mut offset = 0usize;
         while offset < region.size {
             let to_read = min(page_size, region.size - offset);
-            let read_n = os_read_process_memory(
-                proc,
-                region.base_address + offset,
-                &mut page_buf[..to_read],
-            );
+            let read_n =
+                read_process_memory(proc, region.base_address + offset, &mut page_buf[..to_read]);
             let ok = read_n > 0;
 
             if ok {

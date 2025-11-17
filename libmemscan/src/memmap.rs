@@ -12,11 +12,11 @@ use crate::linux;
 #[cfg(windows)]
 use crate::windows;
 
-/// Represents a mapped view of remote process memory
+/// Represents a mapped memory view of remote process memory
 pub struct MappedMemory {
     /// Base address in the remote process
     pub remote_addr: usize,
-    /// Size of the mapped region
+    /// Size of mapped region
     pub size: usize,
     /// Platform-specific handle
     #[cfg(windows)]
@@ -36,23 +36,14 @@ impl MappedMemory {
     /// A `MappedMemory` object that provides access to the mapped memory
     pub fn new(proc: &ProcessHandle, region: &MemoryRegion) -> Result<Self> {
         #[cfg(windows)]
-        {
-            let inner = windows::memmap::MappedMemoryWin::new(proc, region)?;
-            Ok(Self {
-                remote_addr: region.base_address,
-                size: region.size,
-                inner,
-            })
-        }
+        let inner = windows::memmap::MappedMemoryWin::new(proc, region)?;
         #[cfg(unix)]
-        {
-            let inner = linux::memmap::MappedMemoryUnix::new(proc, region)?;
-            Ok(Self {
-                remote_addr: region.base_address,
-                size: region.size,
-                inner,
-            })
-        }
+        let inner = linux::memmap::MappedMemoryUnix::new(proc, region)?;
+        Ok(Self {
+            remote_addr: region.base_address,
+            size: region.size,
+            inner,
+        })
     }
 
     /// Get a slice to the mapped memory
@@ -60,10 +51,7 @@ impl MappedMemory {
     /// # Safety
     /// The returned slice is only valid as long as the MappedMemory exists.
     /// The remote process may modify this memory at any time.
-    pub fn as_slice(&self) -> &[u8] {
-        #[cfg(windows)]
-        return self.inner.as_slice();
-        #[cfg(unix)]
+    pub fn data(&self) -> &[u8] {
         return self.inner.as_slice();
     }
 
