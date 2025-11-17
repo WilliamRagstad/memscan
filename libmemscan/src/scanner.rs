@@ -5,6 +5,7 @@ use crate::process::{MemoryRegion, MemoryRegionIterator, SystemInfo};
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use std::cmp::min;
+use memchr::memmem;
 
 #[cfg(unix)]
 use crate::linux;
@@ -118,7 +119,7 @@ pub fn scan_process(
                 if let Some(pattern) = opts.pattern {
                     let mut prev_off = 0;
                     while prev_off < to_read {
-                        if let Some(rel_off) = naive_search(&page_buf[prev_off..to_read], pattern) {
+                        if let Some(rel_off) = optimized_search(&page_buf[prev_off..to_read], pattern) {
                             let page_offset = prev_off + rel_off;
                             let abs_addr = region.base_address + offset + page_offset;
                             matches_found += 1;
@@ -193,6 +194,15 @@ pub fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     None
 }
 
+/// Optimized pattern search using the memchr crate.
+/// This uses SIMD instructions for significantly better performance.
+pub fn optimized_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return None;
+    }
+    memmem::find(haystack, needle)
+}
+
 // no extra helpers needed on UNIX; we call ProcessHandleUnix::read_mem directly
 
 #[cfg(test)]
@@ -232,5 +242,72 @@ mod tests {
         let haystack = b"\x4D\x5A\x90\x00\x03\x00\x00\x00";
         let needle = b"\x4D\x5A\x90\x00";
         assert_eq!(naive_search(haystack, needle), Some(0));
+    }
+
+    #[test]
+    fn test_optimized_search_found() {
+        let haystack = b"hello world";
+        let needle = b"world";
+        assert_eq!(optimized_search(haystack, needle), Some(6));
+    }
+
+    #[test]
+    fn test_optimized_search_not_found() {
+        let haystack = b"hello world";
+        let needle = b"rust";
+        assert_eq!(optimized_search(haystack, needle), None);
+    }
+
+    #[test]
+    fn test_optimized_search_at_start() {
+        let haystack = b"hello world";
+        let needle = b"hello";
+        assert_eq!(optimized_search(haystack, needle), Some(0));
+    }
+
+    #[test]
+    fn test_optimized_search_empty_needle() {
+        let haystack = b"hello world";
+        let needle = b"";
+        assert_eq!(optimized_search(haystack, needle), None);
+    }
+
+    #[test]
+    fn test_optimized_search_binary_pattern() {
+        let haystack = b"\x4D\x5A\x90\x00\x03\x00\x00\x00";
+        let needle = b"\x4D\x5A\x90\x00";
+        assert_eq!(optimized_search(haystack, needle), Some(0));
+    }
+
+    #[test]
+    fn test_both_searches_match() {
+        // Ensure both search functions produce the same results
+        let haystacks = [
+            b"hello world" as &[u8],
+            b"\x4D\x5A\x90\x00\x03\x00\x00\x00",
+            b"",
+            b"a",
+            b"aaaaaaaaaa",
+        ];
+        let needles = [
+            b"world" as &[u8],
+            b"\x4D\x5A\x90\x00",
+            b"",
+            b"a",
+            b"aa",
+            b"not_there",
+        ];
+
+        for haystack in &haystacks {
+            for needle in &needles {
+                let naive_result = naive_search(haystack, needle);
+                let optimized_result = optimized_search(haystack, needle);
+                assert_eq!(
+                    naive_result, optimized_result,
+                    "Mismatch for haystack {:?} and needle {:?}",
+                    haystack, needle
+                );
+            }
+        }
     }
 }
