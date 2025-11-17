@@ -55,7 +55,7 @@ pub fn query_system_info() -> SystemInfo {
 
 // Small cross-platform wrapper that dispatches to OS-specific process memory readers.
 // This is kept for backward compatibility and fallback cases.
-fn read_process_memory(proc: &ProcessHandle, addr: usize, buf: &mut [u8]) -> usize {
+pub fn read_process_memory(proc: &ProcessHandle, addr: usize, buf: &mut [u8]) -> usize {
     #[cfg(windows)]
     return windows::process::read_process_memory(proc, addr, buf);
     #[cfg(unix)]

@@ -4,9 +4,9 @@ use crate::memmap::MappedMemory;
 use crate::process::ProcessHandle;
 use crate::process::{MemoryRegion, MemoryRegionIterator, SystemInfo, read_process_memory};
 use anyhow::Result;
+use memchr::memmem;
 use owo_colors::OwoColorize;
 use std::cmp::min;
-use memchr::memmem;
 
 #[cfg(unix)]
 use crate::linux;
@@ -181,7 +181,9 @@ pub fn scan_process(
                 if let Some(pattern) = opts.pattern {
                     let mut prev_off = 0;
                     while prev_off < to_read {
-                        if let Some(rel_off) = optimized_search(&page_buf[prev_off..to_read], pattern) {
+                        if let Some(rel_off) =
+                            optimized_search(&page_buf[prev_off..to_read], pattern)
+                        {
                             let page_offset = prev_off + rel_off;
                             let abs_addr = region.base_address + offset + page_offset;
                             matches_found += 1;
@@ -256,7 +258,7 @@ pub fn naive_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     None
 }
 
-/// Optimized pattern search using the memchr crate.
+/// Optimized pattern search using the `memchr` crate.
 /// This uses SIMD instructions for significantly better performance.
 pub fn optimized_search(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() {
