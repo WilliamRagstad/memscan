@@ -41,7 +41,7 @@ impl ProcessHandleUnix {
 
 // ================== Linux/Unix-specific helpers ==================
 
-fn parse_proc_maps(pid: libc::pid_t) -> Result<(Vec<MapEntry>, Option<String>)> {
+fn parse_proc_maps(pid: libc::pid_t) -> Result<(Vec<MemoryRegion>, Option<String>)> {
     // NOTE: This function now returns Vec<MemoryRegion> instead of a custom MapEntry
     // to align with the user's request to use the cross-platform struct directly.
     let maps_path = format!("/proc/{pid}/maps");
