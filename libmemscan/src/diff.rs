@@ -140,7 +140,7 @@ pub fn diff_snapshots(old: &MemoryRegionSnapshot, new: &MemoryRegionSnapshot) ->
 
 /// Parallel change detector for multiple memory regions
 pub struct MemoryDiff<'a> {
-    mapper: MemoryMapper<'a>,
+    pub mapper: MemoryMapper<'a>,
     snapshots: Vec<MemoryRegionSnapshot<'a>>,
 }
 

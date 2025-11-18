@@ -101,6 +101,30 @@ impl<'a> MemoryMapper<'a> {
     pub fn clear(&mut self) {
         self.mappings.clear();
     }
+    
+    /// Get a mapped region by address (finds region containing the address)
+    pub fn get_by_address(&self, address: usize) -> Option<&MappedMemory> {
+        for mapped in self.mappings.values() {
+            let region = &mapped.remote_region;
+            if address >= region.base_address && address < region.base_address + region.size {
+                return Some(mapped);
+            }
+        }
+        None
+    }
+    
+    /// Iterate over all mapped regions
+    pub fn iter(&self) -> impl Iterator<Item = &MappedMemory> {
+        self.mappings.values()
+    }
+    
+    /// Retain only the mapped regions that satisfy the predicate
+    pub fn retain<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&MappedMemory) -> bool,
+    {
+        self.mappings.retain(|_, mapped| f(mapped));
+    }
 }
 
 impl IntoIterator for MemoryMapper<'_> {

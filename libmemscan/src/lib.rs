@@ -13,6 +13,7 @@ pub mod interactive;
 pub mod memmap;
 pub mod process;
 pub mod scanner;
+pub mod values;
 
 use anyhow::Result;
 

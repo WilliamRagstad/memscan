@@ -2,8 +2,9 @@
 
 use anyhow::Result;
 use libmemscan::{
-    interactive::{FilterOp, InteractiveScanner, MathOp, Value, ValueType},
+    interactive::{FilterOp, InteractiveScanner},
     process::{MemoryRegionIterator, ProcessHandle, SystemInfo},
+    values::{MathOp, Value, ValueType},
 };
 use owo_colors::OwoColorize;
 use std::io::{self, Write};

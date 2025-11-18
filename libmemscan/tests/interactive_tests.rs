@@ -1,7 +1,8 @@
 //! Tests for the interactive module
 
-use libmemscan::interactive::{FilterOp, InteractiveScanner, MathOp, Value, ValueType};
+use libmemscan::interactive::FilterOp;
 use libmemscan::process::{MemoryRegion, MemoryProtection, MemoryState, MemoryType};
+use libmemscan::values::{MathOp, Value, ValueType};
 
 /// Helper function to create a mock memory region for testing
 fn create_test_region(base: usize, size: usize) -> MemoryRegion {
