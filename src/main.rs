@@ -36,6 +36,7 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Scan a process's memory regions
+    #[command(alias = "s")]
     Scan {
         /// Target process executable name or id (e.g. "notepad", "notepad.exe", or 1234)
         target: String,
@@ -50,6 +51,7 @@ pub enum Command {
         all_modules: bool,
     },
     /// Interactive mode for iterative memory scanning and modification
+    #[command(alias = "i")]
     Interactive {
         /// Target process executable name or id (e.g. "notepad", "notepad.exe", or 1234)
         target: String,
