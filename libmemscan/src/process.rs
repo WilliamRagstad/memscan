@@ -62,6 +62,14 @@ pub fn read_process_memory(proc: &ProcessHandle, addr: usize, buf: &mut [u8]) ->
     return linux::process::read_process_memory(proc, addr, buf);
 }
 
+/// Write memory to a process at a specific address
+pub fn write_process_memory(proc: &ProcessHandle, addr: usize, buf: &[u8]) -> usize {
+    #[cfg(windows)]
+    return windows::process::write_process_memory(proc, addr, buf);
+    #[cfg(unix)]
+    return linux::process::write_process_memory(proc, addr, buf);
+}
+
 // ================= Cross-platform structures ==================
 
 /// Cross-platform system information about the target process environment.
