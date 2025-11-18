@@ -9,19 +9,85 @@ The functionality is implemented using only user-mode APIs. However, elevated pr
 - [X] Cross-platform support
 - [X] **Memory mapping for instant change detection**
 - [X] **Parallel diffing of watched memory regions**
+- [X] **Interactive mode with REPL for iterative scanning**
+- [X] **Value filtering by type (integers, floats) and comparison operations**
+- [X] **Memory modification with math operations (add, subtract, multiply, divide)**
+- [X] **Dynamic region cleanup for efficient memory usage**
 - [X] Support for scanning large memory regions efficiently
+- [X] Filter memory regions based on module ownership
 - [ ] Configurable scanning options (e.g., case sensitivity, wildcards)
 - [ ] Python bindings for scriptable (automated) scans
 - [ ] Identify dynamic memory regions (e.g., images, stack, all heaps, allocated virtual pages)
-- [X] Filter memory regions based on module ownership
 
 ## Usage
+
+### Pattern Scanning
+
+Scan a process's memory for a specific byte pattern:
 
 ```sh
 memscan scan <process_id/name> --pattern <byte_pattern> [options]
 ```
 
-### Example
+### Interactive Mode
+
+Launch an interactive REPL to iteratively filter memory addresses by value:
+
+```sh
+memscan interactive <process_id/name> [--value-type <type>] [--all-modules]
+```
+
+Value types: `i8`, `i16`, `i32` (default), `i64`, `u8`, `u16`, `u32`, `u64`, `f32`, `f64`
+
+#### Interactive Mode Commands
+
+- `help` - Show available commands
+- `list` - List current matched addresses (max 20)
+- `filter <op> [value]` - Filter addresses by condition
+  - Comparison ops: `eq`, `lt`, `gt` (requires value)
+  - Change ops: `inc`, `dec`, `changed`, `unchanged` (no value required)
+- `set <value> [address]` - Set value at address(es)
+- `add/sub/mul/div <value> [address]` - Apply math operation
+- `quit` - Exit interactive mode
+
+#### Example Interactive Session
+
+```sh
+$ memscan interactive 1234 --value-type i32
+[info] system info: min_addr=0000000000010000, max_addr=00007ffffffeffff, page_size=4096, granularity=65536
+[info] found 133 module regions
+=== Interactive Memory Scanner ===
+[info] Type 'help' for available commands
+
+[info] Performing initial scan for I32 values...
+[done] Found 5000000 possible addresses across 250 regions
+
+> filter eq 100
+[done] Filtered from 5000000 to 50 addresses (12 regions)
+
+> list
+50 matches found
+  0: 00007ff6a1234000 = 100
+  1: 00007ff6a1234100 = 100
+  ...
+
+> filter inc
+[done] Filtered from 50 to 5 addresses (2 regions)
+
+> list
+5 matches found
+  0: 00007ff6a1234000 = 105 (was: 100)
+  1: 00007ff6a1234100 = 103 (was: 100)
+  ...
+
+> set 200
+[done] Set value at 5 addresses
+
+> quit
+[info] Exiting...
+```
+
+### Pattern Scan Example
 
 <details>
 <summary>Verbose memory scan output for Notepad.exe searching for "MZ" header pattern</summary>
