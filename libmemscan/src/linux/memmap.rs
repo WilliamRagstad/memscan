@@ -10,6 +10,7 @@ use anyhow::Result;
 /// Since true shared memory mapping of another process's address space is complex
 /// and requires specific kernel features, we implement a cached read approach that
 /// reads memory into a local buffer.
+#[derive(Debug)]
 pub struct MappedMemoryUnix {
     /// Local buffer containing a copy of the remote memory
     buffer: Vec<u8>,

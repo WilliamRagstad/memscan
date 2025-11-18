@@ -39,7 +39,7 @@ impl MappedMemory {
         #[cfg(windows)]
         let inner = windows::memmap::MappedMemoryWin::map_region(proc, &region)?;
         #[cfg(unix)]
-        let inner = linux::memmap::MappedMemoryUnix::map(proc, region)?;
+        let inner = linux::memmap::MappedMemoryUnix::map_region(proc, &region)?;
         Ok(Self {
             remote_region: region,
             inner,
