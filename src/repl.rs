@@ -1,7 +1,7 @@
 //! REPL (Read-Eval-Print Loop) for interactive memory scanning
 
 use anyhow::Result;
-use memscan::{
+use libmemscan::{
     interactive::{FilterOp, InteractiveScanner},
     process::{MemoryRegionIterator, ProcessHandle, SystemInfo},
     values::{MathOp, Value, ValueType},
@@ -20,7 +20,7 @@ impl<'a> Repl<'a> {
         sys: &SystemInfo,
         value_type: ValueType,
         all_modules: bool,
-        modules: &[memscan::process::MemoryRegion],
+        modules: &[libmemscan::process::MemoryRegion],
     ) -> Result<Self> {
         // Collect all scannable regions
         let mut regions = Vec::new();

@@ -4,7 +4,7 @@
 //! when scanning large memory regions for byte patterns.
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use memscan::scanner::{naive_search, optimized_search};
+use libmemscan::scanner::{naive_search, optimized_search};
 
 fn benchmark_pattern_search(c: &mut Criterion) {
     let mut group = c.benchmark_group("pattern_search");

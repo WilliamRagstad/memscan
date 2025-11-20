@@ -1,0 +1,6 @@
+//! Link to memoryapi.h in onecore.lib
+
+fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rustc-link-lib=onecore");
+}

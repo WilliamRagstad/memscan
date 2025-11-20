@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand, ValueHint, builder::styling::AnsiColor};
-use memscan::{
+use libmemscan::{
     parse_hex_pattern,
     process::{find_process_by_name, get_process_module_regions, open_process, query_system_info},
     scanner::{ScanOptions, scan_process},

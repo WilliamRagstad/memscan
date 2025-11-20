@@ -1,17 +1,19 @@
-//! Python bindings for libmemscan
+//! Python bindings for memscan
 //!
 //! This module provides Python bindings using PyO3 to expose the memscan
 //! functionality to Python scripts. The API is explicit and requires specialized
 //! function calls for fine-grained control.
 
-use pyo3::prelude::*;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::prelude::*;
 use std::collections::HashMap;
 
-use libmemscan::process::{self, ProcessHandle, MemoryRegion, SystemInfo, MemoryType, MemoryState, MemoryProtection};
+use libmemscan::interactive::{FilterOp, InteractiveScanner, MatchedAddress};
+use libmemscan::process::{
+    self, MemoryProtection, MemoryRegion, MemoryState, MemoryType, ProcessHandle, SystemInfo,
+};
 use libmemscan::scanner::{self, ScanOptions};
-use libmemscan::interactive::{InteractiveScanner, FilterOp, MatchedAddress};
-use libmemscan::values::{ValueType, Value, MathOp};
+use libmemscan::values::{MathOp, Value, ValueType};
 
 /// Python wrapper for ProcessHandle
 #[pyclass]
@@ -155,14 +157,17 @@ fn query_system_info() -> PySystemInfo {
 fn get_process_module_regions(handle: &PyProcessHandle) -> PyResult<Vec<PyMemoryRegion>> {
     let regions = process::get_process_module_regions(&handle.handle)
         .map_err(|e| PyRuntimeError::new_err(format!("Failed to get module regions: {}", e)))?;
-    
-    Ok(regions.into_iter().map(|r| PyMemoryRegion {
-        base_address: r.base_address,
-        size: r.size,
-        region_type: r.type_.to_string(),
-        state: r.state.to_string(),
-        protect: r.protect.to_string(),
-    }).collect())
+
+    Ok(regions
+        .into_iter()
+        .map(|r| PyMemoryRegion {
+            base_address: r.base_address,
+            size: r.size,
+            region_type: r.type_.to_string(),
+            state: r.state.to_string(),
+            protect: r.protect.to_string(),
+        })
+        .collect())
 }
 
 /// Parse a hex pattern string into bytes
@@ -177,24 +182,28 @@ fn parse_hex_pattern(pattern: &str) -> PyResult<Vec<u8>> {
 fn read_process_memory(handle: &PyProcessHandle, address: usize, size: usize) -> PyResult<Vec<u8>> {
     let mut buffer = vec![0u8; size];
     let bytes_read = process::read_process_memory(&handle.handle, address, &mut buffer);
-    
+
     if bytes_read == 0 {
         return Err(PyRuntimeError::new_err("Failed to read process memory"));
     }
-    
+
     buffer.truncate(bytes_read);
     Ok(buffer)
 }
 
 /// Write memory to a process at a specific address
 #[pyfunction]
-fn write_process_memory(handle: &PyProcessHandle, address: usize, data: Vec<u8>) -> PyResult<usize> {
+fn write_process_memory(
+    handle: &PyProcessHandle,
+    address: usize,
+    data: Vec<u8>,
+) -> PyResult<usize> {
     let bytes_written = process::write_process_memory(&handle.handle, address, &data);
-    
+
     if bytes_written == 0 {
         return Err(PyRuntimeError::new_err("Failed to write process memory"));
     }
-    
+
     Ok(bytes_written)
 }
 
@@ -216,39 +225,51 @@ fn create_interactive_scanner(
         "u64" => ValueType::U64,
         "f32" => ValueType::F32,
         "f64" => ValueType::F64,
-        _ => return Err(PyValueError::new_err(format!("Invalid value type: {}", value_type))),
-    };
-    
-    let rust_regions: Vec<MemoryRegion> = regions.into_iter().map(|r| {
-        MemoryRegion {
-            base_address: r.base_address,
-            size: r.size,
-            type_: MemoryType::Unknown, // Simplified since we just need the address range
-            state: MemoryState { committed: true, free: false, reserved: false },
-            protect: MemoryProtection {
-                no_access: false,
-                read: true,
-                write: false,
-                execute: false,
-                copy_on_write: false,
-                guarded: false,
-                no_cache: false,
-            },
-            image_file: None,
+        _ => {
+            return Err(PyValueError::new_err(format!(
+                "Invalid value type: {}",
+                value_type
+            )));
         }
-    }).collect();
-    
+    };
+
+    let rust_regions: Vec<MemoryRegion> = regions
+        .into_iter()
+        .map(|r| {
+            MemoryRegion {
+                base_address: r.base_address,
+                size: r.size,
+                type_: MemoryType::Unknown, // Simplified since we just need the address range
+                state: MemoryState {
+                    committed: true,
+                    free: false,
+                    reserved: false,
+                },
+                protect: MemoryProtection {
+                    no_access: false,
+                    read: true,
+                    write: false,
+                    execute: false,
+                    copy_on_write: false,
+                    guarded: false,
+                    no_cache: false,
+                },
+                image_file: None,
+            }
+        })
+        .collect();
+
     // SAFETY: We're storing a raw pointer to the ProcessHandle
     // The Python wrapper must ensure the handle outlives the scanner
     let process_ptr = &handle.handle as *const ProcessHandle;
-    
+
     // SAFETY: We extend the lifetime of the reference here
     // This is safe because we control both lifetimes through Python's ownership
     let scanner = unsafe {
         let process_ref = &*process_ptr;
         InteractiveScanner::new(process_ref, rust_regions, vtype)
     };
-    
+
     Ok(PyInteractiveScanner {
         scanner: Some(scanner),
         process_handle: process_ptr,
@@ -277,195 +298,267 @@ fn f64_to_value(f: f64, vtype: ValueType) -> Value {
 impl PyInteractiveScanner {
     /// Perform initial scan to find all possible addresses
     fn initial_scan(&mut self) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
-        scanner.initial_scan()
+
+        scanner
+            .initial_scan()
             .map_err(|e| PyRuntimeError::new_err(format!("Initial scan failed: {}", e)))
     }
-    
+
     /// Filter addresses by value equality
     fn filter_eq(&mut self, value: f64) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         let val = f64_to_value(value, self.value_type);
-        scanner.filter(FilterOp::Equals, Some(val))
+        scanner
+            .filter(FilterOp::Equals, Some(val))
             .map_err(|e| PyRuntimeError::new_err(format!("Filter failed: {}", e)))
     }
-    
+
     /// Filter addresses by value less than
     fn filter_lt(&mut self, value: f64) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         let val = f64_to_value(value, self.value_type);
-        scanner.filter(FilterOp::LessThan, Some(val))
+        scanner
+            .filter(FilterOp::LessThan, Some(val))
             .map_err(|e| PyRuntimeError::new_err(format!("Filter failed: {}", e)))
     }
-    
+
     /// Filter addresses by value greater than
     fn filter_gt(&mut self, value: f64) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         let val = f64_to_value(value, self.value_type);
-        scanner.filter(FilterOp::GreaterThan, Some(val))
+        scanner
+            .filter(FilterOp::GreaterThan, Some(val))
             .map_err(|e| PyRuntimeError::new_err(format!("Filter failed: {}", e)))
     }
-    
+
     /// Filter addresses where value increased
     fn filter_increased(&mut self) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
-        scanner.filter(FilterOp::Increased, None)
+
+        scanner
+            .filter(FilterOp::Increased, None)
             .map_err(|e| PyRuntimeError::new_err(format!("Filter failed: {}", e)))
     }
-    
+
     /// Filter addresses where value decreased
     fn filter_decreased(&mut self) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
-        scanner.filter(FilterOp::Decreased, None)
+
+        scanner
+            .filter(FilterOp::Decreased, None)
             .map_err(|e| PyRuntimeError::new_err(format!("Filter failed: {}", e)))
     }
-    
+
     /// Filter addresses where value changed
     fn filter_changed(&mut self) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
-        scanner.filter(FilterOp::Changed, None)
+
+        scanner
+            .filter(FilterOp::Changed, None)
             .map_err(|e| PyRuntimeError::new_err(format!("Filter failed: {}", e)))
     }
-    
+
     /// Filter addresses where value unchanged
     fn filter_unchanged(&mut self) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
-        scanner.filter(FilterOp::Unchanged, None)
+
+        scanner
+            .filter(FilterOp::Unchanged, None)
             .map_err(|e| PyRuntimeError::new_err(format!("Filter failed: {}", e)))
     }
-    
+
     /// Get list of matched addresses
     fn get_matches(&self) -> PyResult<Vec<PyMatchedAddress>> {
-        let scanner = self.scanner.as_ref()
+        let scanner = self
+            .scanner
+            .as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         let matches = scanner.matches();
-        Ok(matches.iter().map(|m| PyMatchedAddress {
-            address: m.address,
-            current_value: value_to_f64(&m.current_value),
-            previous_value: m.previous_value.as_ref().map(value_to_f64),
-        }).collect())
+        Ok(matches
+            .iter()
+            .map(|m| PyMatchedAddress {
+                address: m.address,
+                current_value: value_to_f64(&m.current_value),
+                previous_value: m.previous_value.as_ref().map(value_to_f64),
+            })
+            .collect())
     }
-    
+
     /// Get number of matched addresses
     fn match_count(&self) -> PyResult<usize> {
-        let scanner = self.scanner.as_ref()
+        let scanner = self
+            .scanner
+            .as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         Ok(scanner.matches().len())
     }
-    
+
     /// Set value at all matched addresses
     fn set_value(&mut self, value: f64) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         let val = f64_to_value(value, self.value_type);
-        scanner.write_all(val)
+        scanner
+            .write_all(val)
             .map_err(|e| PyRuntimeError::new_err(format!("Set value failed: {}", e)))
     }
-    
+
     /// Set value at a specific address
     fn set_value_at(&mut self, address: usize, value: f64) -> PyResult<()> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         let val = f64_to_value(value, self.value_type);
-        scanner.write_value(address, val)
+        scanner
+            .write_value(address, val)
             .map_err(|e| PyRuntimeError::new_err(format!("Set value failed: {}", e)))
     }
-    
+
     /// Add value to all matched addresses
     fn add_value(&mut self, value: f64) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         let val = f64_to_value(value, self.value_type);
-        scanner.modify_all(MathOp::Add, val)
+        scanner
+            .modify_all(MathOp::Add, val)
             .map_err(|e| PyRuntimeError::new_err(format!("Math operation failed: {}", e)))
     }
-    
+
     /// Subtract value from all matched addresses
     fn sub_value(&mut self, value: f64) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         let val = f64_to_value(value, self.value_type);
-        scanner.modify_all(MathOp::Subtract, val)
+        scanner
+            .modify_all(MathOp::Subtract, val)
             .map_err(|e| PyRuntimeError::new_err(format!("Math operation failed: {}", e)))
     }
-    
+
     /// Multiply value at all matched addresses
     fn mul_value(&mut self, value: f64) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         let val = f64_to_value(value, self.value_type);
-        scanner.modify_all(MathOp::Multiply, val)
+        scanner
+            .modify_all(MathOp::Multiply, val)
             .map_err(|e| PyRuntimeError::new_err(format!("Math operation failed: {}", e)))
     }
-    
+
     /// Divide value at all matched addresses
     fn div_value(&mut self, value: f64) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         let val = f64_to_value(value, self.value_type);
-        scanner.modify_all(MathOp::Divide, val)
+        scanner
+            .modify_all(MathOp::Divide, val)
             .map_err(|e| PyRuntimeError::new_err(format!("Math operation failed: {}", e)))
     }
-    
+
     /// Save a checkpoint with a given name
     fn save_checkpoint(&mut self, name: &str) -> PyResult<()> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
-        scanner.save_checkpoint(name.to_string())
+
+        scanner
+            .save_checkpoint(name.to_string())
             .map_err(|e| PyRuntimeError::new_err(format!("Save checkpoint failed: {}", e)))
     }
-    
+
     /// List all checkpoint names
     fn list_checkpoints(&self) -> PyResult<Vec<String>> {
-        let scanner = self.scanner.as_ref()
+        let scanner = self
+            .scanner
+            .as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
-        Ok(scanner.list_checkpoints().into_iter().map(|s| s.to_string()).collect())
+
+        Ok(scanner
+            .list_checkpoints()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect())
     }
-    
+
     /// Delete a checkpoint by name
     fn delete_checkpoint(&mut self, name: &str) -> PyResult<()> {
-        let scanner = self.scanner.as_mut()
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
+
         if scanner.delete_checkpoint(name) {
             Ok(())
         } else {
-            Err(PyRuntimeError::new_err(format!("Checkpoint '{}' not found", name)))
+            Err(PyRuntimeError::new_err(format!(
+                "Checkpoint '{}' not found",
+                name
+            )))
         }
     }
-    
+
     /// Filter by relative checkpoint changes
-    fn filter_checkpoint(&mut self, cp1: &str, cp2: &str, cp3: &str, margin: f64) -> PyResult<usize> {
-        let scanner = self.scanner.as_mut()
+    fn filter_checkpoint(
+        &mut self,
+        cp1: &str,
+        cp2: &str,
+        cp3: &str,
+        margin: f64,
+    ) -> PyResult<usize> {
+        let scanner = self
+            .scanner
+            .as_mut()
             .ok_or_else(|| PyRuntimeError::new_err("Scanner not initialized"))?;
-        
-        scanner.filter_checkpoint_relative(cp1, cp2, cp3, margin)
+
+        scanner
+            .filter_checkpoint_relative(cp1, cp2, cp3, margin)
             .map_err(|e| PyRuntimeError::new_err(format!("Checkpoint filter failed: {}", e)))
     }
 }
@@ -481,12 +574,12 @@ fn memscan(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_process_memory, m)?)?;
     m.add_function(wrap_pyfunction!(write_process_memory, m)?)?;
     m.add_function(wrap_pyfunction!(create_interactive_scanner, m)?)?;
-    
+
     m.add_class::<PyProcessHandle>()?;
     m.add_class::<PyMemoryRegion>()?;
     m.add_class::<PySystemInfo>()?;
     m.add_class::<PyInteractiveScanner>()?;
     m.add_class::<PyMatchedAddress>()?;
-    
+
     Ok(())
 }

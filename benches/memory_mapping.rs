@@ -4,7 +4,7 @@
 //! sections and traditional ReadProcessMemory calls.
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use memscan::diff::{MemoryRegionSnapshot, diff_snapshots};
+use libmemscan::diff::{MemoryRegionSnapshot, diff_snapshots};
 
 fn benchmark_diff_snapshots(c: &mut Criterion) {
     let mut group = c.benchmark_group("diff_snapshots");

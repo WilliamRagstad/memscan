@@ -4,7 +4,7 @@
 //! user input like "DEADBEEF" or "4D 5A 90 00" into byte arrays.
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use memscan::parse_hex_pattern;
+use libmemscan::parse_hex_pattern;
 
 fn benchmark_hex_parsing(c: &mut Criterion) {
     let mut group = c.benchmark_group("hex_parsing");
