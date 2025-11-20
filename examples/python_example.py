@@ -12,39 +12,39 @@ import time
 
 def find_value_example():
     """Example: Find and modify a specific value in a process"""
-    
+
     # Find process by name (or use a PID directly)
     process_name = input("Enter process name (e.g., 'notepad'): ")
     pid = memscan.find_process_by_name(process_name)
-    
+
     if pid is None:
         print(f"Process '{process_name}' not found")
         return
-    
+
     print(f"Found process: PID={pid}")
-    
+
     # Open the process
     proc = memscan.open_process(pid)
     print("Process opened successfully")
-    
+
     # Get system information
     sys_info = memscan.query_system_info()
     print(f"System info: {sys_info}")
-    
+
     # Get module regions
     modules = memscan.get_process_module_regions(proc)
     print(f"Found {len(modules)} module regions")
-    
+
     # Create an interactive scanner
     value_type = input("Enter value type (i8/i16/i32/i64/u8/u16/u32/u64/f32/f64) [default: i32]: ").strip() or "i32"
     scanner = memscan.create_interactive_scanner(proc, modules, value_type)
     print(f"Scanner created for value type: {value_type}")
-    
+
     # Perform initial scan
     print("\nPerforming initial scan...")
     count = scanner.initial_scan()
     print(f"Found {count} possible addresses")
-    
+
     # Interactive filtering
     while True:
         print(f"\nCurrent matches: {scanner.match_count()}")
@@ -61,9 +61,9 @@ def find_value_example():
         print("  10. Save checkpoint")
         print("  11. List checkpoints")
         print("  0. Exit")
-        
+
         choice = input("\nEnter choice: ").strip()
-        
+
         if choice == "0":
             break
         elif choice == "1":
@@ -112,27 +112,27 @@ def find_value_example():
 
 def pattern_scan_example():
     """Example: Scan for a byte pattern in memory"""
-    
+
     # Find process
     process_name = input("Enter process name: ")
     pid = memscan.find_process_by_name(process_name)
-    
+
     if pid is None:
         print(f"Process '{process_name}' not found")
         return
-    
+
     print(f"Found process: PID={pid}")
-    
+
     # Open the process
     proc = memscan.open_process(pid)
     print("Process opened successfully")
-    
+
     # Get a memory address to read
     address_str = input("Enter memory address (hex, e.g., 0x1000): ")
     address = int(address_str, 16)
-    
+
     size = int(input("Enter number of bytes to read: "))
-    
+
     # Read memory
     try:
         data = memscan.read_process_memory(proc, address, size)
@@ -148,9 +148,9 @@ def main():
     print("Choose an example:")
     print("  1. Interactive memory scanner")
     print("  2. Pattern scan / memory read")
-    
+
     choice = input("\nEnter choice: ").strip()
-    
+
     if choice == "1":
         find_value_example()
     elif choice == "2":
