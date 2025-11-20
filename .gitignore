@@ -1,4 +1,5 @@
 /target
+pymemscan/target
 *.log
 
 # Benchmark results
