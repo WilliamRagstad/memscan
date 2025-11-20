@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand, ValueHint, builder::styling::AnsiColor};
-use libmemscan::{
+use memscan::{
     parse_hex_pattern,
     process::{find_process_by_name, get_process_module_regions, open_process, query_system_info},
     scanner::{ScanOptions, scan_process},
@@ -169,6 +169,9 @@ fn parse_value_type(s: &str) -> anyhow::Result<ValueType> {
         "u64" => ValueType::U64,
         "f32" => ValueType::F32,
         "f64" => ValueType::F64,
-        _ => anyhow::bail!("Unknown value type: {}. Valid types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64", s),
+        _ => anyhow::bail!(
+            "Unknown value type: {}. Valid types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64",
+            s
+        ),
     })
 }
