@@ -1,8 +1,6 @@
-# .\.venv\Scripts\python.exe -m maturin develop
-
-# pymemscan/Makefile
 .PHONY: build clean
+
 build:
-	maturin develop --release
+	maturin develop -q --release
 clean:
-	maturin clean
+	cargo clean
