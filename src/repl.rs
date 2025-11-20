@@ -101,8 +101,17 @@ impl<'a> Repl<'a> {
                 if parts.len() < 2 {
                     println!("{} Usage: filter <op> [value]", "[error]".bright_red());
                     println!("  Ops: eq, lt, gt, inc, dec, changed, unchanged");
+                    println!("  Ops: checkpoint <cp1> <cp2> <cp3> <margin_percent>");
                 } else {
                     self.filter_matches(&parts[1..])?;
+                }
+            }
+            "checkpoint" | "cp" => {
+                if parts.len() < 2 {
+                    println!("{} Usage: checkpoint <subcommand> [args]", "[error]".bright_red());
+                    println!("  Subcommands: save <name>, list, delete <name>");
+                } else {
+                    self.handle_checkpoint(&parts[1..])?;
                 }
             }
             "set" | "s" => {
@@ -139,6 +148,9 @@ impl<'a> Repl<'a> {
         println!("  {} - Filter addresses", "filter <op> [value]".green());
         println!("    Ops: {} (equals), {} (less than), {} (greater than)", "eq".cyan(), "lt".cyan(), "gt".cyan());
         println!("    Ops: {} (increased), {} (decreased), {} (changed), {} (unchanged)", "inc".cyan(), "dec".cyan(), "changed".cyan(), "unchanged".cyan());
+        println!("    Ops: {} (relative checkpoint filter)", "checkpoint <cp1> <cp2> <cp3> <margin%>".cyan());
+        println!("  {} - Manage checkpoints", "checkpoint <subcommand>".green());
+        println!("    Subcommands: {} (save snapshot), {} (list all), {} (delete)", "save <name>".cyan(), "list".cyan(), "delete <name>".cyan());
         println!("  {} - Set value at address(es)", "set <value> [address]".green());
         println!("  {} - Add/sub/mul/div value", "add/sub/mul/div <value> [address]".green());
         println!("  {} - Exit the REPL", "quit, q, exit".green());
@@ -175,6 +187,32 @@ impl<'a> Repl<'a> {
     fn filter_matches(&mut self, args: &[&str]) -> Result<()> {
         if args.is_empty() {
             anyhow::bail!("Filter operation required");
+        }
+
+        // Handle checkpoint-based relative filtering
+        if args[0] == "checkpoint" || args[0] == "cp" {
+            if args.len() < 5 {
+                anyhow::bail!("Checkpoint filter requires: checkpoint <cp1> <cp2> <cp3> <margin%>");
+            }
+            
+            let cp1 = args[1];
+            let cp2 = args[2];
+            let cp3 = args[3];
+            let margin: f64 = args[4].parse()
+                .map_err(|_| anyhow::anyhow!("Invalid margin value: {}", args[4]))?;
+            
+            let before = self.scanner.matches().len();
+            let after = self.scanner.filter_checkpoint_relative(cp1, cp2, cp3, margin)?;
+            
+            println!(
+                "{} Filtered from {} to {} addresses ({} regions)",
+                "[done]".bright_cyan(),
+                before.to_string().bright_yellow(),
+                after.to_string().bright_green(),
+                self.scanner.region_count().to_string().bright_green()
+            );
+            
+            return Ok(());
         }
 
         let (op, compare_value) = match args[0] {
@@ -263,6 +301,50 @@ impl<'a> Repl<'a> {
             println!("{} Modified {} addresses", "[done]".bright_cyan(), count.to_string().bright_green());
         }
 
+        Ok(())
+    }
+    
+    fn handle_checkpoint(&mut self, args: &[&str]) -> Result<()> {
+        if args.is_empty() {
+            anyhow::bail!("Checkpoint subcommand required");
+        }
+        
+        match args[0] {
+            "save" => {
+                if args.len() < 2 {
+                    anyhow::bail!("Checkpoint name required");
+                }
+                let name = args[1].to_string();
+                self.scanner.save_checkpoint(name.clone())?;
+                println!("{} Saved checkpoint '{}'", "[done]".bright_cyan(), name.bright_green());
+            }
+            "list" | "ls" => {
+                let checkpoints = self.scanner.list_checkpoints();
+                if checkpoints.is_empty() {
+                    println!("{} No checkpoints saved", "[info]".bright_cyan());
+                } else {
+                    println!("{} Saved checkpoints:", "[info]".bright_cyan());
+                    for cp in checkpoints {
+                        println!("  - {}", cp.bright_green());
+                    }
+                }
+            }
+            "delete" | "del" | "rm" => {
+                if args.len() < 2 {
+                    anyhow::bail!("Checkpoint name required");
+                }
+                let name = args[1];
+                if self.scanner.delete_checkpoint(name) {
+                    println!("{} Deleted checkpoint '{}'", "[done]".bright_cyan(), name.bright_green());
+                } else {
+                    println!("{} Checkpoint '{}' not found", "[error]".bright_red(), name);
+                }
+            }
+            _ => {
+                anyhow::bail!("Unknown checkpoint subcommand: {}", args[0]);
+            }
+        }
+        
         Ok(())
     }
 }
