@@ -254,7 +254,7 @@ For detailed documentation and more examples, see [python/README.md](python/READ
 
 ## Performance Benchmarking
 
-MemScan includes comprehensive benchmarking infrastructure using `Criterion.rs`. For detailed information, see [BENCHMARKING.md](BENCHMARKING.md).
+MemScan includes comprehensive benchmarking infrastructure using `Criterion.rs`. For detailed information, see [BENCHMARKING.md](./BENCHMARKING.md).
 
 Quick start:
 
