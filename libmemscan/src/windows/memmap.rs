@@ -1,99 +1,91 @@
-//! Windows-specific memory mapping implementation using file mapping objects
+//! Windows-specific memory mapping implementation
+//!
+//! This implementation uses ReadProcessMemory for reliable cross-platform access.
+//! True memory mapping is only possible for MEM_MAPPED regions by duplicating file handles,
+//! which requires complex handle enumeration. For future enhancement, thread injection
+//! could be used to create section mappings in the remote process.
 
 use crate::process::{MemoryRegion, ProcessHandle};
-use crate::windows::memoryapi::MapViewOfFile2;
+use crate::windows::process::read_process_memory;
 use anyhow::Result;
-use std::ptr::{null, null_mut};
-use winapi::{
-    shared::minwindef::LPVOID,
-    um::{
-        handleapi::CloseHandle,
-        memoryapi::{CreateFileMappingW, UnmapViewOfFile},
-        winnt::{HANDLE, PAGE_READONLY, SEC_COMMIT},
-    },
-};
 
 /// Windows-specific mapped memory implementation
+///
+/// Uses ReadProcessMemory to read remote process memory into a local buffer.
+/// This works reliably for all memory types (PRIVATE, MAPPED, IMAGE).
+///
+/// Future enhancement: For MEM_MAPPED regions, could enumerate handles via
+/// NtQuerySystemInformation to duplicate file handles for true memory mapping.
 #[derive(Debug)]
 pub struct MappedMemoryWin {
-    /// Handle to the file mapping object
-    mapping_handle: HANDLE,
-    /// Pointer to mapped view in local process
-    local_ptr: LPVOID,
-    /// Size of mapped region
-    size: usize,
+    /// Local buffer containing a copy of the remote memory
+    buffer: Vec<u8>,
+    /// Remote address that was read
+    remote_addr: usize,
 }
 
 impl MappedMemoryWin {
     /// Create a new memory mapping for a region of a remote process
     ///
-    /// This uses Windows file mapping APIs to create a section object
-    /// backed by the remote process's memory.
+    /// Reads the remote memory into a local buffer using ReadProcessMemory.
+    /// This is the most reliable approach that works for all memory types.
     pub fn map_region(proc: &ProcessHandle, region: &MemoryRegion) -> Result<Self> {
-        unsafe {
-            // Create a file mapping object backed by the remote process memory
-            // Using INVALID_HANDLE_VALUE with SEC_COMMIT creates a page-file backed mapping
-            let mapping_handle = CreateFileMappingW(
-                winapi::um::handleapi::INVALID_HANDLE_VALUE,
-                null_mut(),
-                PAGE_READONLY | SEC_COMMIT,
-                (region.size >> 32) as u32,
-                (region.size & 0xFFFFFFFF) as u32,
-                null(),
+        // Allocate a buffer for the remote memory
+        let mut buffer = vec![0u8; region.size];
+
+        // Read the memory using ReadProcessMemory
+        let bytes_read = read_process_memory(proc, region.base_address, &mut buffer);
+
+        if bytes_read == 0 {
+            anyhow::bail!(
+                "Failed to read memory at {:016x}: {}",
+                region.base_address,
+                std::io::Error::last_os_error()
             );
-
-            if mapping_handle.is_null() {
-                anyhow::bail!(
-                    "CreateFileMappingW failed: {}",
-                    std::io::Error::last_os_error()
-                );
-            }
-
-            // Map the view into the local process
-            // MapViewOfFile2 allows us to specify the remote process handle
-            let local_ptr = MapViewOfFile2(
-                mapping_handle,
-                proc.raw(),
-                region.base_address as u64,
-                null_mut(),
-                region.size,
-                0,
-                PAGE_READONLY,
-            );
-
-            if local_ptr.is_null() {
-                CloseHandle(mapping_handle);
-                anyhow::bail!(
-                    "MapViewOfFile2 failed for address {:016x}: {}",
-                    region.base_address,
-                    std::io::Error::last_os_error()
-                );
-            }
-
-            Ok(Self {
-                mapping_handle,
-                local_ptr,
-                size: region.size,
-            })
         }
+
+        if bytes_read < region.size {
+            anyhow::bail!(
+                "Partial read: expected {} bytes, got {} bytes at address {:016x}",
+                region.size,
+                bytes_read,
+                region.base_address
+            );
+        }
+
+        Ok(Self {
+            buffer,
+            remote_addr: region.base_address,
+        })
     }
 
     /// Get a slice view of mapped memory
     pub fn as_slice(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.local_ptr as *const u8, self.size) }
+        &self.buffer
     }
-}
 
-impl Drop for MappedMemoryWin {
-    fn drop(&mut self) {
-        unsafe {
-            if !self.local_ptr.is_null() {
-                UnmapViewOfFile(self.local_ptr);
-            }
-            if !self.mapping_handle.is_null() {
-                CloseHandle(self.mapping_handle);
-            }
+    /// Refresh mapped memory by re-reading from the remote process
+    #[allow(dead_code)]
+    pub fn refresh(&mut self, proc: &ProcessHandle) -> Result<()> {
+        let bytes_read = read_process_memory(proc, self.remote_addr, &mut self.buffer);
+
+        if bytes_read == 0 {
+            anyhow::bail!(
+                "Failed to refresh memory at {:016x}: {}",
+                self.remote_addr,
+                std::io::Error::last_os_error()
+            );
         }
+
+        if bytes_read < self.buffer.len() {
+            anyhow::bail!(
+                "Partial refresh: expected {} bytes, got {} bytes",
+                self.buffer.len(),
+                bytes_read
+            );
+        }
+
+        Ok(())
     }
 }
 
