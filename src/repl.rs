@@ -42,12 +42,22 @@ impl<'a> Repl<'a> {
     }
 
     pub fn run(&mut self) -> Result<()> {
-        println!("{}", "=== Interactive Memory Scanner ===".bright_yellow().bold());
-        println!("{} Type 'help' for available commands", "[info]".bright_cyan());
+        println!(
+            "{}",
+            "=== Interactive Memory Scanner ===".bright_yellow().bold()
+        );
+        println!(
+            "{} Type 'help' for available commands",
+            "[info]".bright_cyan()
+        );
         println!();
 
         // Perform initial scan
-        println!("{} Performing initial scan for {} values...", "[info]".bright_cyan(), format!("{:?}", self.value_type).green());
+        println!(
+            "{} Performing initial scan for {} values...",
+            "[info]".bright_cyan(),
+            format!("{:?}", self.value_type).green()
+        );
         let count = self.scanner.initial_scan()?;
         println!(
             "{} Found {} possible addresses across {} regions",
@@ -108,7 +118,10 @@ impl<'a> Repl<'a> {
             }
             "checkpoint" | "cp" => {
                 if parts.len() < 2 {
-                    println!("{} Usage: checkpoint <subcommand> [args]", "[error]".bright_red());
+                    println!(
+                        "{} Usage: checkpoint <subcommand> [args]",
+                        "[error]".bright_red()
+                    );
                     println!("  Subcommands: save <name>, list, delete <name>");
                 } else {
                     self.handle_checkpoint(&parts[1..])?;
@@ -123,7 +136,11 @@ impl<'a> Repl<'a> {
             }
             "add" | "sub" | "mul" | "div" => {
                 if parts.len() < 2 {
-                    println!("{} Usage: {} <value> [address]", "[error]".bright_red(), parts[0]);
+                    println!(
+                        "{} Usage: {} <value> [address]",
+                        "[error]".bright_red(),
+                        parts[0]
+                    );
                 } else {
                     self.modify_value(parts[0], &parts[1..])?;
                 }
@@ -144,18 +161,52 @@ impl<'a> Repl<'a> {
     fn print_help(&self) {
         println!("{}", "Available commands:".bright_yellow().bold());
         println!("  {} - Show this help", "help, h".green());
-        println!("  {} - List current matched addresses (max 20)", "list, l".green());
+        println!(
+            "  {} - List current matched addresses (max 20)",
+            "list, l".green()
+        );
         println!("  {} - Filter addresses", "filter <op> [value]".green());
-        println!("    Ops: {} (equals), {} (less than), {} (greater than)", "eq".cyan(), "lt".cyan(), "gt".cyan());
-        println!("    Ops: {} (increased), {} (decreased), {} (changed), {} (unchanged)", "inc".cyan(), "dec".cyan(), "changed".cyan(), "unchanged".cyan());
-        println!("    Ops: {} (relative checkpoint filter)", "checkpoint <cp1> <cp2> <cp3> <margin%>".cyan());
-        println!("  {} - Manage checkpoints", "checkpoint <subcommand>".green());
-        println!("    Subcommands: {} (save snapshot), {} (list all), {} (delete)", "save <name>".cyan(), "list".cyan(), "delete <name>".cyan());
-        println!("  {} - Set value at address(es)", "set <value> [address]".green());
-        println!("  {} - Add/sub/mul/div value", "add/sub/mul/div <value> [address]".green());
+        println!(
+            "    Ops: {} (equals), {} (less than), {} (greater than)",
+            "eq".cyan(),
+            "lt".cyan(),
+            "gt".cyan()
+        );
+        println!(
+            "    Ops: {} (increased), {} (decreased), {} (changed), {} (unchanged)",
+            "inc".cyan(),
+            "dec".cyan(),
+            "changed".cyan(),
+            "unchanged".cyan()
+        );
+        println!(
+            "    Ops: {} (relative checkpoint filter)",
+            "checkpoint <cp1> <cp2> <cp3> <margin%>".cyan()
+        );
+        println!(
+            "  {} - Manage checkpoints",
+            "checkpoint <subcommand>".green()
+        );
+        println!(
+            "    Subcommands: {} (save snapshot), {} (list all), {} (delete)",
+            "save <name>".cyan(),
+            "list".cyan(),
+            "delete <name>".cyan()
+        );
+        println!(
+            "  {} - Set value at address(es)",
+            "set <value> [address]".green()
+        );
+        println!(
+            "  {} - Add/sub/mul/div value",
+            "add/sub/mul/div <value> [address]".green()
+        );
         println!("  {} - Exit the REPL", "quit, q, exit".green());
         println!();
-        println!("{} If no address is specified, operation applies to all matches", "[note]".bright_black());
+        println!(
+            "{} If no address is specified, operation applies to all matches",
+            "[note]".bright_black()
+        );
     }
 
     fn list_matches(&self) -> Result<()> {
@@ -165,7 +216,9 @@ impl<'a> Repl<'a> {
         let display_count = matches.len().min(20);
         for (i, m) in matches.iter().take(display_count).enumerate() {
             let value_str = format_value(&m.current_value);
-            let prev_str = m.previous_value.as_ref()
+            let prev_str = m
+                .previous_value
+                .as_ref()
                 .map(|v| format!(" (was: {})", format_value(v)))
                 .unwrap_or_default();
             println!(
@@ -178,7 +231,11 @@ impl<'a> Repl<'a> {
         }
 
         if matches.len() > display_count {
-            println!("  {} ... and {} more", "[...]".bright_black(), (matches.len() - display_count).to_string().bright_black());
+            println!(
+                "  {} ... and {} more",
+                "[...]".bright_black(),
+                (matches.len() - display_count).to_string().bright_black()
+            );
         }
 
         Ok(())
@@ -194,16 +251,19 @@ impl<'a> Repl<'a> {
             if args.len() < 5 {
                 anyhow::bail!("Checkpoint filter requires: checkpoint <cp1> <cp2> <cp3> <margin%>");
             }
-            
+
             let cp1 = args[1];
             let cp2 = args[2];
             let cp3 = args[3];
-            let margin: f64 = args[4].parse()
+            let margin: f64 = args[4]
+                .parse()
                 .map_err(|_| anyhow::anyhow!("Invalid margin value: {}", args[4]))?;
-            
+
             let before = self.scanner.matches().len();
-            let after = self.scanner.filter_checkpoint_relative(cp1, cp2, cp3, margin)?;
-            
+            let after = self
+                .scanner
+                .filter_checkpoint_relative(cp1, cp2, cp3, margin)?;
+
             println!(
                 "{} Filtered from {} to {} addresses ({} regions)",
                 "[done]".bright_cyan(),
@@ -211,7 +271,7 @@ impl<'a> Repl<'a> {
                 after.to_string().bright_green(),
                 self.scanner.region_count().to_string().bright_green()
             );
-            
+
             return Ok(());
         }
 
@@ -220,19 +280,28 @@ impl<'a> Repl<'a> {
                 if args.len() < 2 {
                     anyhow::bail!("Value required for 'eq' filter");
                 }
-                (FilterOp::Equals, Some(parse_value(args[1], self.value_type)?))
+                (
+                    FilterOp::Equals,
+                    Some(parse_value(args[1], self.value_type)?),
+                )
             }
             "lt" => {
                 if args.len() < 2 {
                     anyhow::bail!("Value required for 'lt' filter");
                 }
-                (FilterOp::LessThan, Some(parse_value(args[1], self.value_type)?))
+                (
+                    FilterOp::LessThan,
+                    Some(parse_value(args[1], self.value_type)?),
+                )
             }
             "gt" => {
                 if args.len() < 2 {
                     anyhow::bail!("Value required for 'gt' filter");
                 }
-                (FilterOp::GreaterThan, Some(parse_value(args[1], self.value_type)?))
+                (
+                    FilterOp::GreaterThan,
+                    Some(parse_value(args[1], self.value_type)?),
+                )
             }
             "inc" | "increased" => (FilterOp::Increased, None),
             "dec" | "decreased" => (FilterOp::Decreased, None),
@@ -243,7 +312,7 @@ impl<'a> Repl<'a> {
 
         let before = self.scanner.matches().len();
         let after = self.scanner.filter(op, compare_value)?;
-        
+
         println!(
             "{} Filtered from {} to {} addresses ({} regions)",
             "[done]".bright_cyan(),
@@ -270,7 +339,11 @@ impl<'a> Repl<'a> {
         } else {
             // Set all addresses
             let count = self.scanner.write_all(value)?;
-            println!("{} Set value at {} addresses", "[done]".bright_cyan(), count.to_string().bright_green());
+            println!(
+                "{} Set value at {} addresses",
+                "[done]".bright_cyan(),
+                count.to_string().bright_green()
+            );
         }
 
         Ok(())
@@ -298,17 +371,21 @@ impl<'a> Repl<'a> {
         } else {
             // Modify all addresses
             let count = self.scanner.modify_all(op, value)?;
-            println!("{} Modified {} addresses", "[done]".bright_cyan(), count.to_string().bright_green());
+            println!(
+                "{} Modified {} addresses",
+                "[done]".bright_cyan(),
+                count.to_string().bright_green()
+            );
         }
 
         Ok(())
     }
-    
+
     fn handle_checkpoint(&mut self, args: &[&str]) -> Result<()> {
         if args.is_empty() {
             anyhow::bail!("Checkpoint subcommand required");
         }
-        
+
         match args[0] {
             "save" => {
                 if args.len() < 2 {
@@ -316,7 +393,11 @@ impl<'a> Repl<'a> {
                 }
                 let name = args[1].to_string();
                 self.scanner.save_checkpoint(name.clone())?;
-                println!("{} Saved checkpoint '{}'", "[done]".bright_cyan(), name.bright_green());
+                println!(
+                    "{} Saved checkpoint '{}'",
+                    "[done]".bright_cyan(),
+                    name.bright_green()
+                );
             }
             "list" | "ls" => {
                 let checkpoints = self.scanner.list_checkpoints();
@@ -335,7 +416,11 @@ impl<'a> Repl<'a> {
                 }
                 let name = args[1];
                 if self.scanner.delete_checkpoint(name) {
-                    println!("{} Deleted checkpoint '{}'", "[done]".bright_cyan(), name.bright_green());
+                    println!(
+                        "{} Deleted checkpoint '{}'",
+                        "[done]".bright_cyan(),
+                        name.bright_green()
+                    );
                 } else {
                     println!("{} Checkpoint '{}' not found", "[error]".bright_red(), name);
                 }
@@ -344,7 +429,7 @@ impl<'a> Repl<'a> {
                 anyhow::bail!("Unknown checkpoint subcommand: {}", args[0]);
             }
         }
-        
+
         Ok(())
     }
 }

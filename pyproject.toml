@@ -1,0 +1,44 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "memscan"
+version = "0.1.0"
+description = "Python bindings for memscan - a high-performance memory scanning library"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "William Ragstad" }]
+classifiers = [
+	"Development Status :: 3 - Alpha",
+	"Intended Audience :: Developers",
+	"License :: OSI Approved :: MIT License",
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3.8",
+	"Programming Language :: Python :: 3.9",
+	"Programming Language :: Python :: 3.10",
+	"Programming Language :: Python :: 3.11",
+	"Programming Language :: Python :: 3.12",
+	"Programming Language :: Rust",
+	"Topic :: Software Development :: Debuggers",
+]
+keywords = [
+	"memory",
+	"scanning",
+	"debugging",
+	"reversing",
+	"process",
+	"analysis",
+]
+
+[project.urls]
+Homepage = "https://github.com/WilliamRagstad/memscan"
+Repository = "https://github.com/WilliamRagstad/memscan"
+
+[tool.maturin]
+# Build from the pymemscan directory
+manifest-path = "pymemscan/Cargo.toml"
+# Python source directory
+python-source = "pymemscan/python"
+module-name = "memscan"
