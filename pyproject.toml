@@ -32,10 +32,8 @@ Homepage = "https://github.com/WilliamRagstad/memscan"
 Repository = "https://github.com/WilliamRagstad/memscan"
 
 [tool.maturin]
-# Use the python feature flag when building
-features = ["python"]
-# Build from the libmemscan directory
-manifest-path = "libmemscan/Cargo.toml"
+# Build from the pymemscan directory
+manifest-path = "pymemscan/Cargo.toml"
 # Python source directory
 python-source = "python"
 module-name = "memscan"

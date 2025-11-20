@@ -28,48 +28,55 @@ Complete Python interface for interactive memory scanning:
 
 ## Implementation Details
 
+### Architecture
+
+The Python bindings are implemented as a **separate crate** (`pymemscan`) that imports and wraps the core `libmemscan` library. This provides a clean separation between the core Rust library and the Python bindings.
+
 ### Files Added
 
-1. **libmemscan/src/python.rs** (492 lines)
+1. **pymemscan/Cargo.toml** (13 lines)
+   - Separate crate for Python bindings
+   - Depends on libmemscan
+   - PyO3 configuration
+
+2. **pymemscan/src/lib.rs** (492 lines)
    - PyO3 bindings implementation
    - Python wrappers for all core types
    - Value type conversions (Rust ↔ Python)
    - Comprehensive error handling
 
-2. **pyproject.toml** (41 lines)
+3. **pyproject.toml** (40 lines)
    - Maturin build configuration
    - Package metadata and dependencies
    - Python 3.8+ compatibility
+   - Points to pymemscan crate
 
-3. **python/memscan/__init__.py** (42 lines)
+4. **python/memscan/__init__.py** (42 lines)
    - Python package initialization
    - Re-exports of native module
 
-4. **python/README.md** (222 lines)
+5. **python/README.md** (222 lines)
    - Complete API documentation
    - Installation instructions
    - Usage examples
 
-5. **examples/python_example.py** (163 lines)
+6. **examples/python_example.py** (163 lines)
    - Interactive example script
    - Demonstrates full workflow
    - Pattern scanning example
 
-6. **test_python_bindings.py** (186 lines)
+7. **test_python_bindings.py** (186 lines)
    - Comprehensive test suite
    - Tests all public APIs
    - Validates functionality without external processes
 
 ### Files Modified
 
-1. **libmemscan/Cargo.toml**
-   - Added pyo3 dependency (optional feature)
-   - Configured cdylib output for Python module
+1. **pyproject.toml**
+   - Updated manifest-path to point to pymemscan crate
+   - Removed feature flags (no longer needed)
 
-2. **libmemscan/src/lib.rs**
-   - Conditionally includes python module
-
-3. **README.md**
+2. **README.md**
    - Updated feature list (marked Python bindings as complete)
    - Added Python bindings section with quick example
    - Links to detailed documentation
@@ -79,6 +86,11 @@ Complete Python interface for interactive memory scanning:
    - Added virtual environment directories
 
 ## Architecture
+
+### Separation of Concerns
+- **pymemscan**: Separate crate dedicated to Python bindings
+- **libmemscan**: Core Rust library, independent of Python
+- Clean separation allows libmemscan to be used without Python dependencies
 
 ### Type Safety
 - All memory values converted to f64 for Python compatibility

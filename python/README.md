@@ -11,10 +11,10 @@ Python bindings for the high-performance memscan library, providing scriptable p
 pip install maturin
 
 # Build and install in development mode
-maturin develop --features python
+maturin develop
 
 # Or build a wheel
-maturin build --release --features python
+maturin build --release
 pip install target/wheels/memscan-*.whl
 ```
 

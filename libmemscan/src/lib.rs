@@ -15,10 +15,6 @@ pub mod process;
 pub mod scanner;
 pub mod values;
 
-// Python bindings (optional feature)
-#[cfg(feature = "python")]
-pub mod python;
-
 use anyhow::Result;
 
 /// Parse a hex string like "DEADBEEF" or "4D 5A 90 00" into bytes.

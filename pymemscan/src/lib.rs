@@ -8,10 +8,10 @@ use pyo3::prelude::*;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use std::collections::HashMap;
 
-use crate::process::{self, ProcessHandle, MemoryRegion, SystemInfo, MemoryType, MemoryState, MemoryProtection};
-use crate::scanner::{self, ScanOptions};
-use crate::interactive::{InteractiveScanner, FilterOp, MatchedAddress};
-use crate::values::{ValueType, Value, MathOp};
+use libmemscan::process::{self, ProcessHandle, MemoryRegion, SystemInfo, MemoryType, MemoryState, MemoryProtection};
+use libmemscan::scanner::{self, ScanOptions};
+use libmemscan::interactive::{InteractiveScanner, FilterOp, MatchedAddress};
+use libmemscan::values::{ValueType, Value, MathOp};
 
 /// Python wrapper for ProcessHandle
 #[pyclass]
@@ -168,7 +168,7 @@ fn get_process_module_regions(handle: &PyProcessHandle) -> PyResult<Vec<PyMemory
 /// Parse a hex pattern string into bytes
 #[pyfunction]
 fn parse_hex_pattern(pattern: &str) -> PyResult<Vec<u8>> {
-    crate::parse_hex_pattern(pattern)
+    libmemscan::parse_hex_pattern(pattern)
         .map_err(|e| PyValueError::new_err(format!("Invalid hex pattern: {}", e)))
 }
 

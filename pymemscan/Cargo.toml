@@ -1,0 +1,13 @@
+[package]
+name = "pymemscan"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "memscan"
+crate-type = ["cdylib"]
+
+[dependencies]
+libmemscan = { path = "../libmemscan" }
+pyo3 = { version = "0.22", features = ["extension-module"] }
+anyhow = "1.0.100"
