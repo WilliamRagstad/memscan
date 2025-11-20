@@ -16,8 +16,8 @@ The functionality is implemented using only user-mode APIs. However, elevated pr
 - [X] **Dynamic region cleanup for efficient memory usage**
 - [X] Support for scanning large memory regions efficiently
 - [X] Filter memory regions based on module ownership
+- [X] **Python bindings for scriptable (automated) scans**
 - [ ] Configurable scanning options (e.g., case sensitivity, wildcards)
-- [ ] Python bindings for scriptable (automated) scans
 - [ ] Identify dynamic memory regions (e.g., images, stack, all heaps, allocated virtual pages)
 
 ## Usage
@@ -198,6 +198,59 @@ let changes = detector.detect_changes(&proc, &regions)?;
 ```
 
 For detailed information, see [MEMORY_MAPPING.md](llm/MEMORY_MAPPING.md).
+
+## Python Bindings
+
+MemScan provides Python bindings for scriptable and automated memory analysis. The Python API is explicit and provides fine-grained control over all operations.
+
+### Installation
+
+```bash
+# Install maturin (build tool)
+pip install maturin
+
+# Build and install in development mode
+maturin develop --features python
+
+# Or build a wheel
+maturin build --release --features python
+pip install target/wheels/memscan-*.whl
+```
+
+### Quick Example
+
+```python
+import memscan
+
+# Find and open a process
+pid = memscan.find_process_by_name("game")
+proc = memscan.open_process(pid)
+
+# Get memory regions
+modules = memscan.get_process_module_regions(proc)
+
+# Create interactive scanner for 32-bit integers
+scanner = memscan.create_interactive_scanner(proc, modules, "i32")
+
+# Perform initial scan
+scanner.initial_scan()
+
+# Filter by exact value (e.g., health = 100)
+scanner.filter_eq(100)
+
+# Wait for value to increase
+scanner.filter_increased()
+
+# List matches
+matches = scanner.get_matches()
+for match in matches[:10]:
+    print(f"Address: 0x{match.address:016x}, Value: {match.current_value}")
+
+# Set value at all matched addresses
+scanner.set_value(999)
+```
+
+For detailed documentation and more examples, see [python/README.md](python/README.md) and [examples/python_example.py](examples/python_example.py).
 
 ## Performance Benchmarking
 
