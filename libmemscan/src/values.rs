@@ -213,6 +213,40 @@ pub fn apply_math_op(a: &Value, b: &Value, op: MathOp) -> Result<Value> {
     })
 }
 
+/// Subtract two values, returning None if types don't match
+pub fn value_subtract(a: &Value, b: &Value) -> Option<Value> {
+    Some(match (a, b) {
+        (Value::I8(a), Value::I8(b)) => Value::I8(a.wrapping_sub(*b)),
+        (Value::I16(a), Value::I16(b)) => Value::I16(a.wrapping_sub(*b)),
+        (Value::I32(a), Value::I32(b)) => Value::I32(a.wrapping_sub(*b)),
+        (Value::I64(a), Value::I64(b)) => Value::I64(a.wrapping_sub(*b)),
+        (Value::U8(a), Value::U8(b)) => Value::U8(a.wrapping_sub(*b)),
+        (Value::U16(a), Value::U16(b)) => Value::U16(a.wrapping_sub(*b)),
+        (Value::U32(a), Value::U32(b)) => Value::U32(a.wrapping_sub(*b)),
+        (Value::U64(a), Value::U64(b)) => Value::U64(a.wrapping_sub(*b)),
+        (Value::F32(a), Value::F32(b)) => Value::F32(a - b),
+        (Value::F64(a), Value::F64(b)) => Value::F64(a - b),
+        _ => return None,
+    })
+}
+
+/// Convert a value to f64 for comparison purposes
+pub fn value_to_f64(value: &Value) -> f64 {
+    match value {
+        Value::I8(v) => *v as f64,
+        Value::I16(v) => *v as f64,
+        Value::I32(v) => *v as f64,
+        Value::I64(v) => *v as f64,
+        Value::U8(v) => *v as f64,
+        Value::U16(v) => *v as f64,
+        Value::U32(v) => *v as f64,
+        Value::U64(v) => *v as f64,
+        Value::F32(v) => *v as f64,
+        Value::F64(v) => *v,
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

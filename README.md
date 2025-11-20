@@ -12,6 +12,7 @@ The functionality is implemented using only user-mode APIs. However, elevated pr
 - [X] **Interactive mode with REPL for iterative scanning**
 - [X] **Value filtering by type (integers, floats) and comparison operations**
 - [X] **Memory modification with math operations (add, subtract, multiply, divide)**
+- [X] **Relative checkpoint filtering for finding values with consistent change rates**
 - [X] **Dynamic region cleanup for efficient memory usage**
 - [X] Support for scanning large memory regions efficiently
 - [X] Filter memory regions based on module ownership
@@ -46,6 +47,11 @@ Value types: `i8`, `i16`, `i32` (default), `i64`, `u8`, `u16`, `u32`, `u64`, `f3
 - `filter <op> [value]` - Filter addresses by condition
   - Comparison ops: `eq`, `lt`, `gt` (requires value)
   - Change ops: `inc`, `dec`, `changed`, `unchanged` (no value required)
+  - Relative checkpoint filter: `checkpoint <cp1> <cp2> <cp3> <margin%>`
+- `checkpoint <subcommand>` - Manage memory checkpoints
+  - `save <name>` - Save current memory state
+  - `list` - List all saved checkpoints
+  - `delete <name>` - Delete a checkpoint
 - `set <value> [address]` - Set value at address(es)
 - `add/sub/mul/div <value> [address]` - Apply math operation
 - `quit` - Exit interactive mode
@@ -86,6 +92,38 @@ $ memscan interactive 1234 --value-type i32
 > quit
 [info] Exiting...
 ```
+
+#### Checkpoint-based Relative Filtering
+
+Find values that change at a consistent rate across multiple observations:
+
+```sh
+> filter eq 100
+[done] Filtered to 50 addresses
+
+> checkpoint save cp1
+[done] Saved checkpoint 'cp1'
+
+# Wait for values to change (e.g., +10)
+> filter inc
+[done] Filtered to 10 addresses
+
+> checkpoint save cp2
+[done] Saved checkpoint 'cp2'
+
+# Wait for values to change again (e.g., +10 more)
+> filter inc
+[done] Filtered to 5 addresses
+
+> checkpoint save cp3
+[done] Saved checkpoint 'cp3'
+
+# Filter for addresses where (cp2-cp1) ≈ (cp3-cp2) within 10% margin
+> filter checkpoint cp1 cp2 cp3 10.0
+[done] Filtered to 3 addresses
+```
+
+This technique is useful for finding values that increment at a consistent rate, such as timers, counters, or resource values.
 
 ### Pattern Scan Example
 
