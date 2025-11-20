@@ -22,9 +22,9 @@ The API consists of three main components:
 ### Platform-Specific Implementations
 
 #### Windows
-- Uses `ReadProcessMemory` to read remote process memory into local buffers
-- Buffer-based approach similar to Linux implementation
-- Note: True memory mapping would require handle enumeration for MEM_MAPPED regions
+- Uses `CreateFileMappingW` and `MapViewOfFile2` to create file mapping objects
+- Maps remote process memory as section objects into the local process
+- Provides direct memory access without ReadProcessMemory overhead
 
 #### Linux/Unix
 - Uses `/proc/<pid>/mem` for memory access
@@ -247,9 +247,9 @@ The benchmarks measure:
 ### Platform Differences
 
 #### Windows
-- Buffer-based approach using ReadProcessMemory
-- Memory is read once into a local buffer
-- Suitable for periodic change detection with refresh
+- True memory mapping using section objects
+- Direct access to remote process memory
+- Lower overhead for repeated access
 
 #### Linux/Unix
 - Buffer-based approach requires initial read
@@ -260,18 +260,16 @@ The benchmarks measure:
 
 ### Current Limitations
 
-1. **Buffer-Based Approach**: Both Windows and Linux use buffer-based reading (not true shared memory mapping)
-2. **Windows Memory Mapping**: True memory mapping of remote process memory is only possible for MEM_MAPPED regions by duplicating file handles via handle enumeration (complex and not implemented)
-3. **Parallel Diffing**: Sequential comparison (parallel version planned)
-4. **Write Support**: Read-only access (by design for safety)
+1. **Linux Implementation**: Not true shared memory mapping; uses buffer-based approach
+2. **Parallel Diffing**: Sequential comparison (parallel version planned)
+3. **Write Support**: Read-only access (by design for safety)
 
 ### Future Enhancements
 
 1. **Parallel Diffing**: Use rayon for parallel snapshot comparison
-2. **Advanced Windows Support**: Implement handle enumeration for MEM_MAPPED regions to enable true memory mapping
-3. **Advanced Linux Support**: Investigate `process_vm_readv` for better performance
-4. **Filtering**: Support for change filters (e.g., ignore specific ranges)
-5. **Statistics**: Track change frequency and patterns
+2. **Advanced Linux Support**: Investigate `process_vm_readv` for better performance
+3. **Filtering**: Support for change filters (e.g., ignore specific ranges)
+4. **Statistics**: Track change frequency and patterns
 
 ## Security Considerations
 
@@ -291,9 +289,10 @@ match mapper.map_region(&proc, &region) {
 ```
 
 Common errors:
-- `Failed to read memory`: ReadProcessMemory failed - insufficient permissions or invalid region
+- `CreateFileMappingW failed`: Insufficient permissions or invalid region
+- `MapViewOfFile2 failed`: Unable to map the specified address
+- `Failed to read memory`: Process terminated or region not accessible
 - `Partial read`: Region became inaccessible during read
-- Process terminated or region not accessible
 
 ## See Also
 
