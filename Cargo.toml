@@ -3,7 +3,6 @@ name = "climemscan"
 version = "0.1.0"
 edition = "2024"
 
-
 [dependencies]
 libmemscan = { path = "libmemscan" }
 clap = { version = "4.5.51", features = ["derive", "wrap_help"] }
