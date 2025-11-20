@@ -24,6 +24,7 @@ use winapi::{
             MEMORY_BASIC_INFORMATION, PAGE_EXECUTE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE,
             PAGE_EXECUTE_WRITECOPY, PAGE_GUARD, PAGE_NOACCESS, PAGE_NOCACHE, PAGE_READONLY,
             PAGE_READWRITE, PAGE_WRITECOPY, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+            PROCESS_VM_WRITE, PROCESS_VM_OPERATION,
         },
     },
 };
@@ -113,7 +114,11 @@ impl From<u32> for MemoryType {
 
 pub(crate) fn open_process(pid: u32) -> Result<ProcessHandle> {
     unsafe {
-        let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+        let handle = OpenProcess(
+            PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION,
+            FALSE,
+            pid,
+        );
         if handle.is_null() {
             anyhow::bail!("OpenProcess failed for pid {}", pid);
         }
@@ -309,5 +314,19 @@ pub(crate) fn read_process_memory(proc: &ProcessHandleWin, addr: usize, buf: &mu
             &mut bytes_read as *mut SIZE_T,
         );
         if res == 0 { 0 } else { bytes_read as usize }
+    }
+}
+
+pub(crate) fn write_process_memory(proc: &ProcessHandleWin, addr: usize, buf: &[u8]) -> usize {
+    unsafe {
+        let mut bytes_written: SIZE_T = 0;
+        let res = winapi::um::memoryapi::WriteProcessMemory(
+            proc.raw(),
+            addr as LPVOID,
+            buf.as_ptr() as LPCVOID,
+            buf.len() as SIZE_T,
+            &mut bytes_written as *mut SIZE_T,
+        );
+        if res == 0 { 0 } else { bytes_written as usize }
     }
 }

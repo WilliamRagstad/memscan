@@ -42,6 +42,10 @@ impl ProcessHandleUnix {
     pub fn read_mem(&self, addr: usize, buf: &mut [u8]) -> std::io::Result<usize> {
         self.mem.read_at(buf, addr as u64)
     }
+
+    pub fn write_mem(&self, addr: usize, buf: &[u8]) -> std::io::Result<usize> {
+        self.mem.write_at(buf, addr as u64)
+    }
 }
 
 // ================== Linux/UNIX-specific helpers ==================
@@ -319,4 +323,8 @@ pub(crate) fn memory_region_iterator_next(
 /// Read process memory into the provided buffer. Returns the number of bytes read (0 on failure).
 pub(crate) fn read_process_memory(proc: &ProcessHandleUnix, addr: usize, buf: &mut [u8]) -> usize {
     proc.read_mem(addr, buf).unwrap_or(0)
+}
+
+pub(crate) fn write_process_memory(proc: &ProcessHandleUnix, addr: usize, buf: &[u8]) -> usize {
+    proc.write_mem(addr, buf).unwrap_or(0)
 }

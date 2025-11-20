@@ -9,9 +9,11 @@ pub(crate) mod windows;
 
 // Platform-independent modules
 pub mod diff;
+pub mod interactive;
 pub mod memmap;
 pub mod process;
 pub mod scanner;
+pub mod values;
 
 use anyhow::Result;
 
