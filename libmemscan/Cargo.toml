@@ -6,11 +6,17 @@ edition = "2024"
 [lib]
 name = "libmemscan"
 path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = "1.0.100"
 owo-colors = "4.2.3"
 memchr = "2.7"
+pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
+
+[features]
+default = []
+python = ["pyo3"]
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
