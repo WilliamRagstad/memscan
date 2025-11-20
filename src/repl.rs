@@ -104,6 +104,19 @@ impl<'a> Repl<'a> {
             "help" | "h" => {
                 self.print_help();
             }
+            "rescan" | "r" => {
+                self.rescan()?;
+            }
+            "type" | "t" => {
+                if parts.len() < 2 {
+                    println!(
+                        "{} Usage: type <i8|i16|i32|i64|u8|u16|u32|u64|f32|f64>",
+                        "[error]".bright_red()
+                    );
+                } else {
+                    self.change_type(parts[1])?;
+                }
+            }
             "list" | "l" => {
                 self.list_matches()?;
             }
@@ -162,6 +175,14 @@ impl<'a> Repl<'a> {
         println!("{}", "Available commands:".bright_yellow().bold());
         println!("  {} - Show this help", "help, h".green());
         println!(
+            "  {} - Clear all state and rescan process",
+            "rescan, r".green()
+        );
+        println!(
+            "  {} - Change value type to scan for",
+            "type <ty>, t <ty>".green()
+        );
+        println!(
             "  {} - List current matched addresses (max 20)",
             "list, l".green()
         );
@@ -207,6 +228,64 @@ impl<'a> Repl<'a> {
             "{} If no address is specified, operation applies to all matches",
             "[note]".bright_black()
         );
+    }
+
+    fn change_type(&mut self, ty: &str) -> Result<()> {
+        let new_type = match ty.to_lowercase().as_str() {
+            "i8" => ValueType::I8,
+            "i16" => ValueType::I16,
+            "i32" => ValueType::I32,
+            "i64" => ValueType::I64,
+            "u8" => ValueType::U8,
+            "u16" => ValueType::U16,
+            "u32" => ValueType::U32,
+            "u64" => ValueType::U64,
+            "f32" => ValueType::F32,
+            "f64" => ValueType::F64,
+            _ => {
+                anyhow::bail!(
+                    "Unknown value type: {}. Valid types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64",
+                    ty
+                );
+            }
+        };
+
+        if new_type == self.value_type {
+            println!(
+                "{} Value type is already {}",
+                "[info]".bright_cyan(),
+                format!("{:?}", self.value_type).green()
+            );
+            return Ok(());
+        }
+
+        self.value_type = new_type;
+        self.scanner.set_value_type(new_type);
+
+        println!(
+            "{} Changed value type to {}. Run 'rescan' to perform a fresh scan.",
+            "[done]".bright_cyan(),
+            format!("{:?}", self.value_type).green()
+        );
+
+        Ok(())
+    }
+
+    fn rescan(&mut self) -> Result<()> {
+        println!(
+            "{} Rescanning process memory from scratch for {} values...",
+            "[info]".bright_cyan(),
+            format!("{:?}", self.value_type).green()
+        );
+        let count = self.scanner.rescan()?;
+        println!(
+            "{} Found {} possible addresses across {} regions",
+            "[done]".bright_cyan(),
+            count.to_string().bright_green(),
+            self.scanner.region_count().to_string().bright_green()
+        );
+        println!();
+        Ok(())
     }
 
     fn list_matches(&self) -> Result<()> {
