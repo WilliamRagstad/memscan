@@ -1,4 +1,5 @@
 /target
+pymemscan/target
 *.log
 
 # Benchmark results
@@ -8,3 +9,19 @@
 # Test and verification binaries
 verify_lib_structure
 /tmp/
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.Python
+venv/
+ENV/
+env/
+.venv/

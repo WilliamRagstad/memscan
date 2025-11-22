@@ -134,3 +134,38 @@ fn test_value_display() {
         assert!(!bytes.is_empty());
     }
 }
+
+#[test]
+fn test_value_subtract() {
+    use libmemscan::values::value_subtract;
+    
+    // Test integer subtraction
+    let result = value_subtract(&Value::I32(100), &Value::I32(50));
+    assert!(result.is_some());
+    match result.unwrap() {
+        Value::I32(v) => assert_eq!(v, 50),
+        _ => panic!("Wrong type"),
+    }
+    
+    // Test float subtraction
+    let result = value_subtract(&Value::F64(100.0), &Value::F64(50.0));
+    assert!(result.is_some());
+    match result.unwrap() {
+        Value::F64(v) => assert!((v - 50.0).abs() < 0.001),
+        _ => panic!("Wrong type"),
+    }
+    
+    // Test type mismatch
+    let result = value_subtract(&Value::I32(100), &Value::U32(50));
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_value_to_f64() {
+    use libmemscan::values::value_to_f64;
+    
+    assert_eq!(value_to_f64(&Value::I32(100)), 100.0);
+    assert_eq!(value_to_f64(&Value::F64(3.14)), 3.14);
+    assert_eq!(value_to_f64(&Value::U64(1000)), 1000.0);
+}
+

@@ -12,11 +12,12 @@ The functionality is implemented using only user-mode APIs. However, elevated pr
 - [X] **Interactive mode with REPL for iterative scanning**
 - [X] **Value filtering by type (integers, floats) and comparison operations**
 - [X] **Memory modification with math operations (add, subtract, multiply, divide)**
+- [X] **Relative checkpoint filtering for finding values with consistent change rates**
 - [X] **Dynamic region cleanup for efficient memory usage**
 - [X] Support for scanning large memory regions efficiently
 - [X] Filter memory regions based on module ownership
+- [X] **Python bindings for scriptable (automated) scans**
 - [ ] Configurable scanning options (e.g., case sensitivity, wildcards)
-- [ ] Python bindings for scriptable (automated) scans
 - [ ] Identify dynamic memory regions (e.g., images, stack, all heaps, allocated virtual pages)
 
 ## Usage
@@ -46,6 +47,11 @@ Value types: `i8`, `i16`, `i32` (default), `i64`, `u8`, `u16`, `u32`, `u64`, `f3
 - `filter <op> [value]` - Filter addresses by condition
   - Comparison ops: `eq`, `lt`, `gt` (requires value)
   - Change ops: `inc`, `dec`, `changed`, `unchanged` (no value required)
+  - Relative checkpoint filter: `checkpoint <cp1> <cp2> <cp3> <margin%>`
+- `checkpoint <subcommand>` - Manage memory checkpoints
+  - `save <name>` - Save current memory state
+  - `list` - List all saved checkpoints
+  - `delete <name>` - Delete a checkpoint
 - `set <value> [address]` - Set value at address(es)
 - `add/sub/mul/div <value> [address]` - Apply math operation
 - `quit` - Exit interactive mode
@@ -86,6 +92,38 @@ $ memscan interactive 1234 --value-type i32
 > quit
 [info] Exiting...
 ```
+
+#### Checkpoint-based Relative Filtering
+
+Find values that change at a consistent rate across multiple observations:
+
+```sh
+> filter eq 100
+[done] Filtered to 50 addresses
+
+> checkpoint save cp1
+[done] Saved checkpoint 'cp1'
+
+# Wait for values to change (e.g., +10)
+> filter inc
+[done] Filtered to 10 addresses
+
+> checkpoint save cp2
+[done] Saved checkpoint 'cp2'
+
+# Wait for values to change again (e.g., +10 more)
+> filter inc
+[done] Filtered to 5 addresses
+
+> checkpoint save cp3
+[done] Saved checkpoint 'cp3'
+
+# Filter for addresses where (cp2-cp1) ≈ (cp3-cp2) within 10% margin
+> filter checkpoint cp1 cp2 cp3 10.0
+[done] Filtered to 3 addresses
+```
+
+This technique is useful for finding values that increment at a consistent rate, such as timers, counters, or resource values.
 
 ### Pattern Scan Example
 
@@ -161,9 +199,62 @@ let changes = detector.detect_changes(&proc, &regions)?;
 
 For detailed information, see [MEMORY_MAPPING.md](llm/MEMORY_MAPPING.md).
 
+## Python Bindings
+
+MemScan provides Python bindings for scriptable and automated memory analysis. The Python API is explicit and provides fine-grained control over all operations.
+
+### Installation
+
+```bash
+# Install maturin (build tool)
+pip install maturin
+
+# Build and install in development mode
+maturin develop
+
+# Or build a wheel
+maturin build --release
+pip install target/wheels/memscan-*.whl
+```
+
+### Quick Example
+
+```python
+import memscan
+
+# Find and open a process
+pid = memscan.find_process_by_name("game")
+proc = memscan.open_process(pid)
+
+# Get memory regions
+modules = memscan.get_process_module_regions(proc)
+
+# Create interactive scanner for 32-bit integers
+scanner = memscan.create_interactive_scanner(proc, modules, "i32")
+
+# Perform initial scan
+scanner.initial_scan()
+
+# Filter by exact value (e.g., health = 100)
+scanner.filter_eq(100)
+
+# Wait for value to increase
+scanner.filter_increased()
+
+# List matches
+matches = scanner.get_matches()
+for match in matches[:10]:
+    print(f"Address: 0x{match.address:016x}, Value: {match.current_value}")
+
+# Set value at all matched addresses
+scanner.set_value(999)
+```
+
+For detailed documentation and more examples, see [python/README.md](python/README.md) and [examples/python_example.py](examples/python_example.py).
+
 ## Performance Benchmarking
 
-MemScan includes comprehensive benchmarking infrastructure using `Criterion.rs`. For detailed information, see [BENCHMARKING.md](BENCHMARKING.md).
+MemScan includes comprehensive benchmarking infrastructure using `Criterion.rs`. For detailed information, see [BENCHMARKING.md](./llm/BENCHMARKING.md).
 
 Quick start:
 
